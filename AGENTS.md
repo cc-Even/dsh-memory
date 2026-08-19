@@ -126,6 +126,15 @@ pnpm exec vitest run tests/loader-composition.spec.ts
 - 测试优先使用真实 Cordis 服务组合；仅在 LLM 返回和模型工具能力边界使用轻量 fake/mock。
 - 行为变更至少覆盖成功、幂等/重复、失败降级、重启恢复或权限隔离中相关的路径。
 
+## 子 Agent 质量门
+
+迭代任务采用顺序阶段门：规格冻结 → 普通 RED 测试 → 测试契约只读评审 → GREEN 实现 → 独立只读 Code Review → 独立验收。强依赖阶段不得并行越过前一门禁。
+
+- Code Review Agent 不修改代码或测试，重点检查正确性边界、复杂度、可维护性、安全与隐私、兼容性、错误语义以及测试是否足以支撑实现结论。
+- Code Review 发现必须修复项时，退回原开发 Agent；修复后由同一或新的只读 reviewer 复审，批准前不得进入最终验收。
+- 最终验收 Agent 独立复跑定向测试、全量测试、typecheck、build 和 diff 范围检查，不以 Code Review 结论替代运行证据。
+- 开发、Code Review 与最终验收的交接均记录基线 HEAD、工作树、文件归属、精确命令与退出码、剩余风险。
+
 ## 当前架构边界
 
 - 一个 owner 的全部 records 和 jobs 存在同一 JSON scope 文档中，每次写入整体替换；
