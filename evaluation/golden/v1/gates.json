@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "id": "dsh-memory-retrieval",
+    "referenceCommit": "dc000a4877538b193a51444e890fe552147ffa9f",
+    "version": "1.0.0"
+  },
+  "overall": {
+    "recallAt5": {
+      "macroFloor": 0.904762,
+      "microFloor": 0.916667
+    },
+    "recallAt10": {
+      "macroFloor": 0.952381,
+      "microFloor": 0.958333
+    },
+    "mrrAt10": {
+      "valueFloor": 0.805357
+    }
+  },
+  "buckets": [
+    {
+      "bucket": "synonym",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "synonym",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "pronoun",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "pronoun",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "multi_topic",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "multi_topic",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 0.833333
+      }
+    },
+    {
+      "bucket": "current_head",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 0.75
+      }
+    },
+    {
+      "bucket": "current_head",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "temporal",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 0.666667,
+        "microFloor": 0.666667
+      },
+      "recallAt10": {
+        "macroFloor": 0.666667,
+        "microFloor": 0.666667
+      },
+      "mrrAt10": {
+        "valueFloor": 0.4
+      }
+    },
+    {
+      "bucket": "temporal",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 0.833333
+      }
+    },
+    {
+      "bucket": "cross_session",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "cross_session",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 1
+      }
+    },
+    {
+      "bucket": "exact_id",
+      "language": "zh",
+      "recallAt5": {
+        "macroFloor": 0,
+        "microFloor": 0
+      },
+      "recallAt10": {
+        "macroFloor": 0.666667,
+        "microFloor": 0.666667
+      },
+      "mrrAt10": {
+        "valueFloor": 0.097222
+      }
+    },
+    {
+      "bucket": "exact_id",
+      "language": "en",
+      "recallAt5": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "recallAt10": {
+        "macroFloor": 1,
+        "microFloor": 1
+      },
+      "mrrAt10": {
+        "valueFloor": 0.361111
+      }
+    }
+  ],
+  "hardChecks": {
+    "scopeLeaks": 0,
+    "forbiddenHits": 0,
+    "duplicateResultIds": 0
+  }
+}

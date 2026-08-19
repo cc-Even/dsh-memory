@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-memory.invalid/evaluation/golden/v1/dataset.schema.json",
+  "title": "dsh-memory retrieval Golden Set v1",
+  "description": "JSON Schema validates the local shape. The runner additionally validates global ID uniqueness, corpus-local references, owner/channel consistency, evolution symmetry and revision ordering, split coverage, and bucket-specific cardinality rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "datasetId",
+    "datasetVersion",
+    "referenceCommit",
+    "evaluationTime",
+    "corpora",
+    "queries"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetId": { "const": "dsh-memory-retrieval" },
+    "datasetVersion": { "const": "1.0.0" },
+    "referenceCommit": {
+      "const": "dc000a4877538b193a51444e890fe552147ffa9f",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "evaluationTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "固定 UTC 数据审核参考时间，用于人工复核 validity 标签；它不是 public search() 可注入的检索时钟。"
+    },
+    "corpora": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/corpus" }
+    },
+    "queries": {
+      "type": "array",
+      "minItems": 48,
+      "items": { "$ref": "#/$defs/query" }
+    }
+  },
+  "$defs": {
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userId", "agentId"],
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "relations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supersedes", "supersededBy", "consolidates", "sourceMemoryIds"],
+      "properties": {
+        "chainId": { "type": "string", "minLength": 1 },
+        "supersedes": { "$ref": "#/$defs/idArray" },
+        "supersededBy": { "$ref": "#/$defs/idArray" },
+        "consolidates": { "$ref": "#/$defs/idArray" },
+        "sourceMemoryIds": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "owner",
+        "sourceSessionId",
+        "layer",
+        "content",
+        "tags",
+        "status",
+        "visibility",
+        "sourceType",
+        "confidence",
+        "createdAt",
+        "updatedAt",
+        "revision",
+        "relations"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sourceSessionId": { "type": "string", "minLength": 1 },
+        "layer": {
+          "enum": ["l0_basic_info", "l1_raw", "l2_fact", "l3_summary", "l4_identity"]
+        },
+        "content": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "status": { "enum": ["active", "superseded", "archived", "deleted"] },
+        "visibility": { "enum": ["recallable", "source_only"] },
+        "sourceType": { "enum": ["explicit", "inferred", "composite"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "validFrom": { "type": "string", "format": "date-time" },
+        "validUntil": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Current records should omit validUntil. Expired fixtures must use a fixed instant permanently in the past."
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "relations": { "$ref": "#/$defs/relations" }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "records"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/record" }
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "corpusId",
+        "language",
+        "bucket",
+        "owner",
+        "sessionId",
+        "sessionOnly",
+        "channel",
+        "query",
+        "relevantIds",
+        "forbiddenIds",
+        "split"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "corpusId": { "type": "string", "minLength": 1 },
+        "language": { "enum": ["zh", "en"] },
+        "bucket": {
+          "enum": [
+            "synonym",
+            "pronoun",
+            "multi_topic",
+            "current_head",
+            "temporal",
+            "cross_session",
+            "exact_id"
+          ]
+        },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "sessionOnly": { "type": "boolean" },
+        "channel": { "enum": ["normal", "profile"] },
+        "query": { "type": "string", "minLength": 1 },
+        "relevantIds": { "$ref": "#/$defs/idArray" },
+        "forbiddenIds": { "$ref": "#/$defs/idArray" },
+        "split": { "enum": ["baseline", "holdout"] }
+      }
+    }
+  }
+}

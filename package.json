@@ -43,6 +43,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsdown",
+    "eval:golden": "pnpm run build && node evaluation/run-golden.mjs --dataset evaluation/golden/v1/retrieval.json --gates evaluation/golden/v1/gates.json --repeat 2",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepare": "pnpm run build"

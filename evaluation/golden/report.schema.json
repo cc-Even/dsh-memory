@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-memory.invalid/evaluation/golden/report.schema.json",
+  "title": "dsh-memory Golden Set report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "dataset",
+    "runner",
+    "embeddingSpace",
+    "counts",
+    "metrics",
+    "buckets",
+    "cases",
+    "hardChecks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "referenceCommit"],
+      "properties": {
+        "id": { "const": "dsh-memory-retrieval" },
+        "version": { "type": "string", "minLength": 1 },
+        "referenceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "repeats"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "repeats": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "embeddingSpace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "dimensions"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "dimensions": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpora", "records", "queries", "relevantQueries", "negativeQueries"],
+      "properties": {
+        "corpora": { "type": "integer", "minimum": 1 },
+        "records": { "type": "integer", "minimum": 1 },
+        "queries": { "type": "integer", "minimum": 1 },
+        "relevantQueries": { "type": "integer", "minimum": 1 },
+        "negativeQueries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recallAt5",
+        "recallAt10",
+        "mrrAt10",
+        "conflictAccuracy",
+        "duplicateCompressionRate",
+        "degradationRate"
+      ],
+      "properties": {
+        "recallAt5": { "$ref": "#/$defs/recall" },
+        "recallAt10": { "$ref": "#/$defs/recall" },
+        "mrrAt10": { "$ref": "#/$defs/mrr" },
+        "conflictAccuracy": { "$ref": "#/$defs/notMeasured" },
+        "duplicateCompressionRate": { "$ref": "#/$defs/notMeasured" },
+        "degradationRate": { "$ref": "#/$defs/notMeasured" }
+      }
+    },
+    "buckets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bucket" }
+    },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    },
+    "hardChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopeLeaks", "forbiddenHits", "duplicateResultIds"],
+      "properties": {
+        "scopeLeaks": { "type": "integer", "minimum": 0 },
+        "forbiddenHits": { "type": "integer", "minimum": 0 },
+        "duplicateResultIds": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "unitInterval": { "type": "number", "minimum": 0, "maximum": 1 },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["macro", "micro"],
+      "properties": {
+        "macro": { "$ref": "#/$defs/unitInterval" },
+        "micro": { "$ref": "#/$defs/unitInterval" }
+      }
+    },
+    "mrr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cutoff", "value"],
+      "properties": {
+        "cutoff": { "const": 10 },
+        "value": { "$ref": "#/$defs/unitInterval" }
+      }
+    },
+    "notMeasured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "reason"],
+      "properties": {
+        "status": { "const": "not_measured" },
+        "value": { "type": "null" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "language",
+        "queryCount",
+        "relevantQueryCount",
+        "negativeQueryCount",
+        "recallAt5",
+        "recallAt10",
+        "mrrAt10"
+      ],
+      "properties": {
+        "bucket": {
+          "enum": [
+            "synonym",
+            "pronoun",
+            "multi_topic",
+            "current_head",
+            "temporal",
+            "cross_session",
+            "exact_id"
+          ]
+        },
+        "language": { "enum": ["zh", "en"] },
+        "queryCount": { "type": "integer", "minimum": 1 },
+        "relevantQueryCount": { "type": "integer", "minimum": 0 },
+        "negativeQueryCount": { "type": "integer", "minimum": 0 },
+        "recallAt5": { "$ref": "#/$defs/recall" },
+        "recallAt10": { "$ref": "#/$defs/recall" },
+        "mrrAt10": { "$ref": "#/$defs/mrr" }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "corpusId",
+        "language",
+        "bucket",
+        "split",
+        "channel",
+        "relevantIds",
+        "forbiddenIds",
+        "returnedIds",
+        "firstRelevantRank",
+        "recallAt5",
+        "recallAt10",
+        "reciprocalRank",
+        "forbiddenHits"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "corpusId": { "type": "string", "minLength": 1 },
+        "language": { "enum": ["zh", "en"] },
+        "bucket": {
+          "enum": [
+            "synonym",
+            "pronoun",
+            "multi_topic",
+            "current_head",
+            "temporal",
+            "cross_session",
+            "exact_id"
+          ]
+        },
+        "split": { "enum": ["baseline", "holdout"] },
+        "channel": { "enum": ["normal", "profile"] },
+        "relevantIds": { "$ref": "#/$defs/idArray" },
+        "forbiddenIds": { "$ref": "#/$defs/idArray" },
+        "returnedIds": {
+          "type": "array",
+          "description": "Authoritative search order, intentionally allowing duplicates so duplicate-result hard failures remain observable.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "firstRelevantRank": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1, "maximum": 10 },
+            { "type": "null" }
+          ]
+        },
+        "recallAt5": { "$ref": "#/$defs/nullableUnitInterval" },
+        "recallAt10": { "$ref": "#/$defs/nullableUnitInterval" },
+        "reciprocalRank": { "$ref": "#/$defs/nullableUnitInterval" },
+        "forbiddenHits": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "nullableUnitInterval": {
+      "oneOf": [
+        { "$ref": "#/$defs/unitInterval" },
+        { "type": "null" }
+      ],
+      "description": "Null for negative cases excluded from Recall/MRR denominators."
+    }
+  }
+}
