@@ -30,6 +30,7 @@ import {
 } from './retrieval.ts'
 import { memoryDomainSpec } from './schema.ts'
 import type { MemoryScopeKey, MemoryScopeState, StoredMemoryJob } from './schema.ts'
+import { findMemoryStateViolation } from './state-invariant.ts'
 import type {
   AddMemoryInput,
   ForgetReceipt,
@@ -944,39 +945,13 @@ function validatePlan(
 }
 
 function validateState(state: MemoryScopeState): void {
-  const records = new Map<MemoryId, MemoryRecord>()
+  const violation = findMemoryStateViolation(state.records)
+  if (violation !== undefined) throw new MemoryError('CONCURRENT_MODIFICATION', violation)
+
   for (const record of state.records) {
-    if (records.has(record.id)) throw new MemoryError('CONCURRENT_MODIFICATION', `duplicate memory id '${record.id}'`)
     if (!WRITABLE_LAYERS.has(record.layer)) throw new MemoryError('INVALID_INPUT', `reserved memory layer '${record.layer}' cannot be stored by this provider`)
     if (record.embedding.spaceId !== HASH_EMBEDDING_SPACE_ID || record.embedding.dimensions !== HASH_EMBEDDING_DIMENSIONS) {
       throw new MemoryError('EMBEDDING_SPACE_MISMATCH', `memory '${record.id}' uses embedding space '${record.embedding.spaceId}'`)
-    }
-    records.set(record.id, record)
-  }
-  const heads = new Map<string, MemoryId>()
-  for (const record of state.records) {
-    for (const targetId of [...record.supersedes, ...record.consolidates, ...record.supersededBy]) {
-      const target = records.get(targetId)
-      if (target === undefined) throw new MemoryError('CONCURRENT_MODIFICATION', `memory '${record.id}' references missing '${targetId}'`)
-      if (!sameOwner(record.scope, target.scope)) throw new MemoryError('CONCURRENT_MODIFICATION', 'memory relation crosses scope')
-    }
-    for (const oldId of [...record.supersedes, ...record.consolidates]) {
-      const oldRecord = requiredMapValue(records, oldId, 'related memory')
-      if (!oldRecord.supersededBy.includes(record.id)) {
-        throw new MemoryError('CONCURRENT_MODIFICATION', `memory relation '${record.id}' -> '${oldId}' is not bidirectional`)
-      }
-    }
-    if (record.chainId !== undefined && record.status === 'active' && record.visibility === 'recallable') {
-      if (heads.has(record.chainId)) throw new MemoryError('CONCURRENT_MODIFICATION', `memory chain '${record.chainId}' has multiple active heads`)
-      heads.set(record.chainId, record.id)
-    }
-    if (record.status === 'deleted' && record.visibility === 'recallable') {
-      throw new MemoryError('CONCURRENT_MODIFICATION', `deleted memory '${record.id}' remains recallable`)
-    }
-    if (record.status !== 'deleted'
-      && (record.layer === 'l2_fact' || record.layer === 'l3_summary' || record.layer === 'l4_identity')
-      && record.sourceType !== 'explicit' && record.sourceMemoryIds.length === 0) {
-      throw new MemoryError('CONCURRENT_MODIFICATION', `derived memory '${record.id}' has no raw source`)
     }
   }
 }
