@@ -14,7 +14,7 @@
 - 模型权限最小化：模型工具不能自行指定 tenant、user、agent 或 session；
 - 可审计：召回消息进入正常 Session surface，模型失败时原始证据仍可召回。
 
-详细设计见 `docs/design.zh.md`（中文）和 `docs/design.md`（英文）；安装、配置与公共 API 见 `README.zh.md` 和 `README.md`。
+详细设计见 `docs/design.zh.md`（中文）和 `docs/design.md`（英文）；安装、配置与公共 API 见 `README.zh.md` 和 `README.md`；外部 Embedding/LLM 接口的安全测试方式见 `docs/testing-guide.zh.md`。
 
 ## 技术栈与常用命令
 
@@ -35,9 +35,9 @@ pnpm build
 提交前至少运行后三项。只执行单个测试文件可使用：
 
 ```sh
-pnpm test -- tests/memory.spec.ts
-pnpm test -- tests/tool-memory.spec.ts
-pnpm test -- tests/loader-composition.spec.ts
+pnpm exec vitest run tests/memory.spec.ts
+pnpm exec vitest run tests/tool-memory.spec.ts
+pnpm exec vitest run tests/loader-composition.spec.ts
 ```
 
 ## 代码地图
@@ -56,6 +56,7 @@ pnpm test -- tests/loader-composition.spec.ts
 | `tests/memory.spec.ts` | 服务集成测试，使用真实 Cordis/LLM/storage 组件 | 服务、hook、抽取、调和、遗忘回归 |
 | `tests/tool-memory.spec.ts` | 工具注册、参数映射和输出契约 | 模型工具回归 |
 | `tests/loader-composition.spec.ts` | 真实 Loader + JSON 后端冷重启持久化测试 | 包装配、配置、重启恢复回归 |
+| `docs/testing-guide.zh.md` | 外部 Embedding/LLM 接口连通性、安全与嵌入空间边界 | 仅在任务需要真实模型接缝时参考；普通单测不应访问外网 |
 | `tsconfig.json` / `tsdown.config.ts` | 类型产物和三个 ESM 入口的构建 | 构建或导出调整 |
 
 ## 核心调用链

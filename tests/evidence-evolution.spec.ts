@@ -191,9 +191,7 @@ describe('evolution evidence provenance', () => {
     })
   })
 
-  // Temporary RED contracts: after evidence inheritance is implemented, change
-  // every `it.fails` below to ordinary `it`; otherwise a correct fix fails CI.
-  it.fails('CONSOLIDATE inherits target evidence in addition to the current raw source', async () => {
+  it('CONSOLIDATE inherits target evidence in addition to the current raw source', async () => {
     const { priorMonth, priorDay, current, evolved } = await prepareConsolidation()
 
     exactSourceIds(evolved, [
@@ -203,16 +201,19 @@ describe('evolution evidence provenance', () => {
     ])
   })
 
-  it.fails('SUPERSEDE inherits target evidence in addition to the current raw source', async () => {
+  it('SUPERSEDE inherits target evidence in addition to the current raw source', async () => {
     const { prior, current, evolved } = await prepareSupersede()
 
     exactSourceIds(evolved, [prior.receipt.rawMemoryId, current.rawMemoryId])
   })
 
-  it.fails('keeps a consolidated chain head until its final raw evidence is forgotten', async () => {
+  it('keeps a consolidated chain head until its final raw evidence is forgotten', async () => {
     const { ctx, priorMonth, priorDay, current, evolved } = await prepareConsolidation()
 
-    await ctx.memory.forget(current.rawMemoryId, scope('current'))
+    await expect(ctx.memory.forget(current.rawMemoryId, scope('current'))).resolves.toMatchObject({
+      forgotten: true,
+      memoryId: current.rawMemoryId,
+    })
     const afterCurrent = ctx.memory.get(evolved.id, scope('current'))
     if (afterCurrent === undefined) throw new Error('expected the consolidated chain head')
     expect(afterCurrent).toMatchObject({ status: 'active', visibility: 'recallable' })
@@ -221,13 +222,19 @@ describe('evolution evidence provenance', () => {
       priorDay.receipt.rawMemoryId,
     ])
 
-    await ctx.memory.forget(priorMonth.receipt.rawMemoryId, scope('current'))
+    await expect(ctx.memory.forget(priorMonth.receipt.rawMemoryId, scope('current'))).resolves.toMatchObject({
+      forgotten: true,
+      memoryId: priorMonth.receipt.rawMemoryId,
+    })
     const afterFirstPrior = ctx.memory.get(evolved.id, scope('current'))
     if (afterFirstPrior === undefined) throw new Error('expected the consolidated chain head')
     expect(afterFirstPrior).toMatchObject({ status: 'active', visibility: 'recallable' })
     exactSourceIds(afterFirstPrior, [priorDay.receipt.rawMemoryId])
 
-    await ctx.memory.forget(priorDay.receipt.rawMemoryId, scope('current'))
+    await expect(ctx.memory.forget(priorDay.receipt.rawMemoryId, scope('current'))).resolves.toMatchObject({
+      forgotten: true,
+      memoryId: priorDay.receipt.rawMemoryId,
+    })
     expect(ctx.memory.get(evolved.id, scope('current'))).toMatchObject({
       status: 'deleted',
       visibility: 'source_only',

@@ -669,7 +669,7 @@ export class MemoryService extends Service implements MemoryCapability {
         revision,
         supersedes: operation.type === 'SUPERSEDE' ? targetIds : [],
         consolidates: operation.type === 'CONSOLIDATE' ? targetIds : [],
-        sourceMemoryIds: [raw.id],
+        sourceMemoryIds: [...new Set([raw.id, ...targets.flatMap(target => target.sourceMemoryIds)])],
         sourceTurnIndexes: [...new Set(sources.flatMap(item => item.evidenceTurnIndexes))],
         tags: normalizeTags(sources.flatMap(item => item.tags)),
         meta: sources.length === 1
@@ -973,7 +973,8 @@ function validateState(state: MemoryScopeState): void {
     if (record.status === 'deleted' && record.visibility === 'recallable') {
       throw new MemoryError('CONCURRENT_MODIFICATION', `deleted memory '${record.id}' remains recallable`)
     }
-    if ((record.layer === 'l2_fact' || record.layer === 'l3_summary' || record.layer === 'l4_identity')
+    if (record.status !== 'deleted'
+      && (record.layer === 'l2_fact' || record.layer === 'l3_summary' || record.layer === 'l4_identity')
       && record.sourceType !== 'explicit' && record.sourceMemoryIds.length === 0) {
       throw new MemoryError('CONCURRENT_MODIFICATION', `derived memory '${record.id}' has no raw source`)
     }
