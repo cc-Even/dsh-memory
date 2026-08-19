@@ -3,3 +3,4 @@ node_modules/
 *.tgz
 .idea
 docs/iteration-plan.zh.md
+docs/testing-guide.zh.md

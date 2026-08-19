@@ -227,6 +227,8 @@ pnpm build
 
 测试覆盖原始证据优先的幂等写入、跨会话检索、自动召回、抽取降级、记忆调和、证据感知遗忘、四个模型工具，以及 Loader 冷重启后的持久化。
 
+外部 Embedding 与大语言模型连通性测试见 [Agent 开发测试指南](docs/testing-guide.zh.md)。
+
 ## 参与贡献
 
 欢迎提交 Issue 和 Pull Request。行为变更请同时补充测试；面向用户的文档发生变化时，请同步更新 `README.md` 与 `README.zh.md`。提交 PR 前请运行 `pnpm typecheck`、`pnpm test` 和 `pnpm build`。

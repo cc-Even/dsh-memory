@@ -227,6 +227,8 @@ pnpm build
 
 The test suite covers raw-first idempotent writes, cross-session retrieval, automatic recall, degraded extraction, reconciliation, evidence-aware forgetting, all four model tools, and persistence across a cold Loader restart.
 
+For external Embedding and chat-model connectivity checks, see the [Agent development testing guide](docs/testing-guide.zh.md).
+
 ## Contributing
 
 Issues and pull requests are welcome. For behavior changes, please include tests and update both `README.md` and `README.zh.md` when user-facing documentation changes. Run `pnpm typecheck`, `pnpm test`, and `pnpm build` before opening a pull request.
