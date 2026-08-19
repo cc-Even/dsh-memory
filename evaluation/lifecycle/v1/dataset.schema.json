@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evyn.dev/dsh-memory/evaluation/lifecycle/v1/dataset.schema.json",
+  "title": "dsh-memory scripted lifecycle dataset v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "datasetId",
+    "datasetVersion",
+    "referenceCommit",
+    "provenance",
+    "cases"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetId": { "const": "dsh-memory-lifecycle-scripted" },
+    "datasetVersion": { "type": "string", "minLength": 1 },
+    "referenceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "interpretation", "adapter", "externalNetwork", "modelQualityClaim"],
+      "properties": {
+        "mode": { "const": "scripted" },
+        "interpretation": { "const": "pipeline-conformance-only" },
+        "adapter": { "const": "deterministic-script-adapter-v1" },
+        "externalNetwork": { "const": false },
+        "modelQualityClaim": { "const": false }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userId", "agentId"],
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "setup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alias", "content", "layer"],
+      "properties": {
+        "alias": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "content": { "type": "string", "minLength": 1 },
+        "layer": { "enum": ["l2_fact", "l4_identity"] }
+      }
+    },
+    "scriptStep": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["phase", "outcome", "payload"],
+          "properties": {
+            "phase": { "enum": ["extraction", "reconciliation"] },
+            "outcome": { "const": "json" },
+            "payload": { "type": "object" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["phase", "outcome", "errorCode"],
+          "properties": {
+            "phase": { "enum": ["extraction", "reconciliation"] },
+            "outcome": { "const": "throw" },
+            "errorCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["phase", "outcome", "rawText"],
+          "properties": {
+            "phase": { "enum": ["extraction", "reconciliation"] },
+            "outcome": { "const": "invalid_json" },
+            "rawText": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflict", "duplicate", "degradation"],
+      "properties": {
+        "conflict": { "type": "boolean" },
+        "duplicate": { "type": "boolean" },
+        "degradation": { "const": true }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "targetAliases", "receiptStatus"],
+      "properties": {
+        "operation": {
+          "anyOf": [
+            { "enum": ["ADD", "NOOP", "CONSOLIDATE", "SUPERSEDE"] },
+            { "type": "null" }
+          ]
+        },
+        "targetAliases": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+        },
+        "duplicateTargetAlias": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "receiptStatus": { "enum": ["completed", "degraded"] }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "language",
+        "role",
+        "faultScenario",
+        "owner",
+        "sessionId",
+        "content",
+        "idempotencyKey",
+        "setup",
+        "modelScript",
+        "measurements",
+        "expected"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "language": { "enum": ["zh", "en"] },
+        "role": {
+          "enum": ["conformance", "metric_sentinel", "fault_injection"]
+        },
+        "faultScenario": {
+          "enum": ["nominal", "injected_model_failure", "invalid_json", "schema_failure"]
+        },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "content": { "type": "string", "minLength": 1 },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "setup": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/setup" }
+        },
+        "modelScript": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/scriptStep" }
+        },
+        "measurements": { "$ref": "#/$defs/measurements" },
+        "expected": { "$ref": "#/$defs/expected" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "faultScenario": { "const": "nominal" } } },
+          "then": {
+            "properties": {
+              "measurements": {
+                "properties": { "conflict": { "const": true } }
+              },
+              "expected": {
+                "properties": {
+                  "operation": { "enum": ["ADD", "NOOP", "CONSOLIDATE", "SUPERSEDE"] },
+                  "receiptStatus": { "const": "completed" }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "role": { "const": "fault_injection" },
+              "measurements": {
+                "properties": {
+                  "conflict": { "const": false },
+                  "duplicate": { "const": false }
+                }
+              },
+              "expected": {
+                "properties": {
+                  "operation": { "type": "null" },
+                  "targetAliases": { "maxItems": 0 },
+                  "receiptStatus": { "const": "degraded" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "measurements": { "properties": { "duplicate": { "const": true } } } } },
+          "then": {
+            "properties": {
+              "expected": {
+                "required": ["duplicateTargetAlias"],
+                "properties": { "operation": { "const": "NOOP" } }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,522 @@
+{
+  "cases": [
+    {
+      "conflictLabel": "TP",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "SUPERSEDE",
+      "id": "op-zh-supersede-tp",
+      "language": "zh",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "SUPERSEDE",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "FN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "SUPERSEDE",
+      "id": "op-zh-supersede-fn",
+      "language": "zh",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "ADD",
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "metric_sentinel",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "ADD",
+      "id": "op-zh-add-tn",
+      "language": "zh",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "ADD",
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": true,
+        "evidenceAttachedToExpectedTarget": true,
+        "measured": true,
+        "noNewActiveDerived": true
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-zh-duplicate-exact",
+      "language": "zh",
+      "newActiveDerivedCount": 0,
+      "observedOperation": "NOOP",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": true,
+        "evidenceAttachedToExpectedTarget": true,
+        "measured": true,
+        "noNewActiveDerived": true
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-zh-duplicate-paraphrase",
+      "language": "zh",
+      "newActiveDerivedCount": 0,
+      "observedOperation": "NOOP",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "CONSOLIDATE",
+      "id": "op-zh-consolidate-tn",
+      "language": "zh",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "CONSOLIDATE",
+      "observedTargetAliases": [
+        "day",
+        "month"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "FP",
+      "duplicateObservation": {
+        "compressed": false,
+        "evidenceAttachedToExpectedTarget": false,
+        "measured": true,
+        "noNewActiveDerived": false
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-zh-duplicate-fp",
+      "language": "zh",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "SUPERSEDE",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "metric_sentinel",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TP",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "SUPERSEDE",
+      "id": "op-en-supersede-tp",
+      "language": "en",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "SUPERSEDE",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "FN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "SUPERSEDE",
+      "id": "op-en-supersede-fn",
+      "language": "en",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "ADD",
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "metric_sentinel",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "ADD",
+      "id": "op-en-add-tn",
+      "language": "en",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "ADD",
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": true,
+        "evidenceAttachedToExpectedTarget": true,
+        "measured": true,
+        "noNewActiveDerived": true
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-en-duplicate-exact",
+      "language": "en",
+      "newActiveDerivedCount": 0,
+      "observedOperation": "NOOP",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": true,
+        "evidenceAttachedToExpectedTarget": true,
+        "measured": true,
+        "noNewActiveDerived": true
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-en-duplicate-paraphrase",
+      "language": "en",
+      "newActiveDerivedCount": 0,
+      "observedOperation": "NOOP",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "TN",
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": "CONSOLIDATE",
+      "id": "op-en-consolidate-tn",
+      "language": "en",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "CONSOLIDATE",
+      "observedTargetAliases": [
+        "quiet",
+        "window"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "conformance",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": "FP",
+      "duplicateObservation": {
+        "compressed": false,
+        "evidenceAttachedToExpectedTarget": false,
+        "measured": true,
+        "noNewActiveDerived": false
+      },
+      "expectedOperation": "NOOP",
+      "id": "op-en-duplicate-fp",
+      "language": "en",
+      "newActiveDerivedCount": 1,
+      "observedOperation": "SUPERSEDE",
+      "observedTargetAliases": [
+        "old"
+      ],
+      "rawFirstPass": true,
+      "receiptStatus": "completed",
+      "role": "metric_sentinel",
+      "scenario": "nominal"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-zh-model-extraction",
+      "language": "zh",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "injected_model_failure"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-en-model-reconciliation",
+      "language": "en",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "injected_model_failure"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-zh-invalid-json-extraction",
+      "language": "zh",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "invalid_json"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-en-invalid-json-reconciliation",
+      "language": "en",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "invalid_json"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-zh-schema-extraction",
+      "language": "zh",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "schema_failure"
+    },
+    {
+      "conflictLabel": null,
+      "duplicateObservation": {
+        "compressed": null,
+        "evidenceAttachedToExpectedTarget": null,
+        "measured": false,
+        "noNewActiveDerived": null
+      },
+      "expectedOperation": null,
+      "id": "fault-en-schema-reconciliation",
+      "language": "en",
+      "newActiveDerivedCount": 0,
+      "observedOperation": null,
+      "observedTargetAliases": [],
+      "rawFirstPass": true,
+      "receiptStatus": "degraded",
+      "role": "fault_injection",
+      "scenario": "schema_failure"
+    }
+  ],
+  "counts": {
+    "acceptedExtractWrites": 20,
+    "faultCases": 6,
+    "nominalCases": 14,
+    "totalCases": 20
+  },
+  "dataset": {
+    "id": "dsh-memory-lifecycle-scripted",
+    "referenceCommit": "f32fbd7846ddf5c5130c5bb696c695b56b9d70a8",
+    "version": "1.0.0"
+  },
+  "hardChecks": {
+    "observationAmbiguities": 0,
+    "rawFirstViolations": 0,
+    "scopeLeaks": 0,
+    "scriptConsumptionErrors": 0,
+    "unexpectedDerivedOnDegraded": 0,
+    "unexpectedReceiptStatuses": 0
+  },
+  "metrics": {
+    "conflictAccuracy": {
+      "byLanguage": [
+        {
+          "confusion": {
+            "falseNegative": 1,
+            "falsePositive": 1,
+            "trueNegative": 4,
+            "truePositive": 1
+          },
+          "denominator": 7,
+          "language": "en",
+          "numerator": 5,
+          "value": 0.714286
+        },
+        {
+          "confusion": {
+            "falseNegative": 1,
+            "falsePositive": 1,
+            "trueNegative": 4,
+            "truePositive": 1
+          },
+          "denominator": 7,
+          "language": "zh",
+          "numerator": 5,
+          "value": 0.714286
+        }
+      ],
+      "confusion": {
+        "falseNegative": 2,
+        "falsePositive": 2,
+        "trueNegative": 8,
+        "truePositive": 2
+      },
+      "denominator": 14,
+      "numerator": 10,
+      "status": "measured",
+      "value": 0.714286
+    },
+    "degradationRate": {
+      "scenarios": {
+        "injected_model_failure": {
+          "accepted": 2,
+          "degraded": 2,
+          "value": 1
+        },
+        "invalid_json": {
+          "accepted": 2,
+          "degraded": 2,
+          "value": 1
+        },
+        "nominal": {
+          "accepted": 14,
+          "degraded": 0,
+          "value": 0
+        },
+        "schema_failure": {
+          "accepted": 2,
+          "degraded": 2,
+          "value": 1
+        }
+      },
+      "status": "measured_by_scenario"
+    },
+    "duplicateCompressionRate": {
+      "byLanguage": [
+        {
+          "compressed": 2,
+          "language": "en",
+          "total": 3,
+          "value": 0.666667
+        },
+        {
+          "compressed": 2,
+          "language": "zh",
+          "total": 3,
+          "value": 0.666667
+        }
+      ],
+      "compressed": 4,
+      "status": "measured",
+      "total": 6,
+      "value": 0.666667
+    }
+  },
+  "provenance": {
+    "adapter": "deterministic-script-adapter-v1",
+    "externalNetwork": false,
+    "interpretation": "pipeline-conformance-only",
+    "mode": "scripted",
+    "modelQualityClaim": false
+  },
+  "runner": {
+    "repeats": 2,
+    "version": 1
+  },
+  "schemaVersion": 1
+}

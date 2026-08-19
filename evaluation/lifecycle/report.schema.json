@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evyn.dev/dsh-memory/evaluation/lifecycle/report.schema.json",
+  "title": "dsh-memory scripted lifecycle report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "dataset", "runner", "provenance", "counts", "metrics", "cases", "hardChecks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "dataset": { "$ref": "#/$defs/dataset" },
+    "runner": { "$ref": "#/$defs/runner" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "counts": { "$ref": "#/$defs/counts" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/caseReport" }
+    },
+    "hardChecks": { "$ref": "#/$defs/hardChecks" }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "referenceCommit"],
+      "properties": {
+        "id": { "const": "dsh-memory-lifecycle-scripted" },
+        "version": { "type": "string", "minLength": 1 },
+        "referenceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "repeats"],
+      "properties": {
+        "version": { "const": 1 },
+        "repeats": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "interpretation", "adapter", "externalNetwork", "modelQualityClaim"],
+      "properties": {
+        "mode": { "const": "scripted" },
+        "interpretation": { "const": "pipeline-conformance-only" },
+        "adapter": { "const": "deterministic-script-adapter-v1" },
+        "externalNetwork": { "const": false },
+        "modelQualityClaim": { "const": false }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalCases", "nominalCases", "faultCases", "acceptedExtractWrites"],
+      "properties": {
+        "totalCases": { "const": 20 },
+        "nominalCases": { "const": 14 },
+        "faultCases": { "const": 6 },
+        "acceptedExtractWrites": { "const": 20 }
+      }
+    },
+    "confusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["truePositive", "trueNegative", "falsePositive", "falseNegative"],
+      "properties": {
+        "truePositive": { "type": "integer", "minimum": 0 },
+        "trueNegative": { "type": "integer", "minimum": 0 },
+        "falsePositive": { "type": "integer", "minimum": 0 },
+        "falseNegative": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "conflictLanguage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "value", "numerator", "denominator", "confusion"],
+      "properties": {
+        "language": { "enum": ["en", "zh"] },
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "numerator": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 1 },
+        "confusion": { "$ref": "#/$defs/confusion" }
+      }
+    },
+    "conflictAccuracy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "numerator", "denominator", "confusion", "byLanguage"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "numerator": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 1 },
+        "confusion": { "$ref": "#/$defs/confusion" },
+        "byLanguage": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/conflictLanguage" }
+        }
+      }
+    },
+    "duplicateLanguage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "value", "compressed", "total"],
+      "properties": {
+        "language": { "enum": ["en", "zh"] },
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "compressed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "duplicateCompressionRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "compressed", "total", "byLanguage"],
+      "properties": {
+        "status": { "const": "measured" },
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "compressed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 1 },
+        "byLanguage": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/duplicateLanguage" }
+        }
+      }
+    },
+    "scenarioMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "degraded", "value"],
+      "properties": {
+        "accepted": { "type": "integer", "minimum": 1 },
+        "degraded": { "type": "integer", "minimum": 0 },
+        "value": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "degradationRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "scenarios"],
+      "properties": {
+        "status": { "const": "measured_by_scenario" },
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nominal", "injected_model_failure", "invalid_json", "schema_failure"],
+          "properties": {
+            "nominal": { "$ref": "#/$defs/scenarioMetric" },
+            "injected_model_failure": { "$ref": "#/$defs/scenarioMetric" },
+            "invalid_json": { "$ref": "#/$defs/scenarioMetric" },
+            "schema_failure": { "$ref": "#/$defs/scenarioMetric" }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflictAccuracy", "duplicateCompressionRate", "degradationRate"],
+      "properties": {
+        "conflictAccuracy": { "$ref": "#/$defs/conflictAccuracy" },
+        "duplicateCompressionRate": { "$ref": "#/$defs/duplicateCompressionRate" },
+        "degradationRate": { "$ref": "#/$defs/degradationRate" }
+      }
+    },
+    "duplicateObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured", "noNewActiveDerived", "evidenceAttachedToExpectedTarget", "compressed"],
+      "properties": {
+        "measured": { "type": "boolean" },
+        "noNewActiveDerived": { "type": ["boolean", "null"] },
+        "evidenceAttachedToExpectedTarget": { "type": ["boolean", "null"] },
+        "compressed": { "type": ["boolean", "null"] }
+      }
+    },
+    "caseReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "language",
+        "role",
+        "scenario",
+        "expectedOperation",
+        "observedOperation",
+        "conflictLabel",
+        "receiptStatus",
+        "observedTargetAliases",
+        "newActiveDerivedCount",
+        "duplicateObservation",
+        "rawFirstPass"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "language": { "enum": ["zh", "en"] },
+        "role": { "enum": ["conformance", "metric_sentinel", "fault_injection"] },
+        "scenario": { "enum": ["nominal", "injected_model_failure", "invalid_json", "schema_failure"] },
+        "expectedOperation": {
+          "anyOf": [
+            { "enum": ["ADD", "NOOP", "CONSOLIDATE", "SUPERSEDE"] },
+            { "type": "null" }
+          ]
+        },
+        "observedOperation": {
+          "anyOf": [
+            { "enum": ["ADD", "NOOP", "CONSOLIDATE", "SUPERSEDE"] },
+            { "type": "null" }
+          ]
+        },
+        "conflictLabel": { "enum": ["TP", "TN", "FP", "FN", null] },
+        "receiptStatus": { "enum": ["completed", "degraded"] },
+        "observedTargetAliases": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "newActiveDerivedCount": { "type": "integer", "minimum": 0 },
+        "duplicateObservation": { "$ref": "#/$defs/duplicateObservation" },
+        "rawFirstPass": { "type": "boolean" }
+      }
+    },
+    "hardChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawFirstViolations",
+        "unexpectedDerivedOnDegraded",
+        "observationAmbiguities",
+        "scriptConsumptionErrors",
+        "unexpectedReceiptStatuses",
+        "scopeLeaks"
+      ],
+      "properties": {
+        "rawFirstViolations": { "type": "integer", "minimum": 0 },
+        "unexpectedDerivedOnDegraded": { "type": "integer", "minimum": 0 },
+        "observationAmbiguities": { "type": "integer", "minimum": 0 },
+        "scriptConsumptionErrors": { "type": "integer", "minimum": 0 },
+        "unexpectedReceiptStatuses": { "type": "integer", "minimum": 0 },
+        "scopeLeaks": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

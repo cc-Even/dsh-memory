@@ -1,0 +1,1294 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "dsh-memory-lifecycle-scripted",
+  "datasetVersion": "1.0.0",
+  "referenceCommit": "f32fbd7846ddf5c5130c5bb696c695b56b9d70a8",
+  "provenance": {
+    "mode": "scripted",
+    "interpretation": "pipeline-conformance-only",
+    "adapter": "deterministic-script-adapter-v1",
+    "externalNetwork": false,
+    "modelQualityClaim": false
+  },
+  "cases": [
+    {
+      "id": "op-zh-supersede-tp",
+      "language": "zh",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-supersede-tp",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-supersede-tp-primary",
+      "content": "用户：北极星项目现在改为十一月上线。",
+      "idempotencyKey": "op-zh-supersede-tp-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "北极星项目将在十月上线。",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "北极星项目现在改为十一月上线。",
+                "layer": "l2_fact",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "SUPERSEDE",
+                "sourceRef": "new-memory",
+                "targetAliases": [
+                  "old"
+                ],
+                "content": "北极星项目将在十一月上线。",
+                "reason": "当前上线月份已变更。"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "SUPERSEDE",
+        "targetAliases": [
+          "old"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-supersede-fn",
+      "language": "zh",
+      "role": "metric_sentinel",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-supersede-fn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-supersede-fn-primary",
+      "content": "用户：我现在更喜欢远程办公。",
+      "idempotencyKey": "op-zh-supersede-fn-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "用户更喜欢到办公室办公。",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "用户现在更喜欢远程办公。",
+                "layer": "l4_identity",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "ADD",
+                "sourceRef": "new-memory"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "SUPERSEDE",
+        "targetAliases": [
+          "old"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-add-tn",
+      "language": "zh",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-add-tn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-add-tn-primary",
+      "content": "用户：我的航班是周五上午九点。",
+      "idempotencyKey": "op-zh-add-tn-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "用户的航班是周五上午九点。",
+                "layer": "l2_fact",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "ADD",
+                "sourceRef": "new-memory"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "ADD",
+        "targetAliases": [],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-duplicate-exact",
+      "language": "zh",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-duplicate-exact",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-duplicate-exact-primary",
+      "content": "用户：我喜欢喝无糖拿铁。",
+      "idempotencyKey": "op-zh-duplicate-exact-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "用户喜欢喝无糖拿铁。",
+          "layer": "l4_identity"
+        },
+        {
+          "alias": "distractor",
+          "content": "用户喜欢在下午喝绿茶。",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "用户喜欢喝无糖拿铁。",
+                "layer": "l4_identity",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "NOOP",
+                "sourceRef": "new-memory",
+                "duplicateAlias": "old"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-duplicate-paraphrase",
+      "language": "zh",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-duplicate-paraphrase",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-duplicate-paraphrase-primary",
+      "content": "用户：发布窗口仍然定在十月。",
+      "idempotencyKey": "op-zh-duplicate-paraphrase-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "产品计划在十月发布。",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "产品的发布月份是十月。",
+                "layer": "l2_fact",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "NOOP",
+                "sourceRef": "new-memory",
+                "duplicateAlias": "old"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-consolidate-tn",
+      "language": "zh",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-consolidate-tn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-consolidate-tn-primary",
+      "content": "用户：北极星项目定于十月十五日上线。",
+      "idempotencyKey": "op-zh-consolidate-tn-extract",
+      "setup": [
+        {
+          "alias": "month",
+          "content": "北极星项目在十月上线。",
+          "layer": "l2_fact"
+        },
+        {
+          "alias": "day",
+          "content": "北极星项目在十五日上线。",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "北极星项目定于十月十五日上线。",
+                "layer": "l2_fact",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "CONSOLIDATE",
+                "sourceRefs": [
+                  "new-memory"
+                ],
+                "targetAliases": [
+                  "month",
+                  "day"
+                ],
+                "content": "北极星项目定于十月十五日上线。"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "CONSOLIDATE",
+        "targetAliases": [
+          "month",
+          "day"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-zh-duplicate-fp",
+      "language": "zh",
+      "role": "metric_sentinel",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-zh-duplicate-fp",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-zh-duplicate-fp-primary",
+      "content": "用户：我仍然只使用深色主题。",
+      "idempotencyKey": "op-zh-duplicate-fp-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "用户只使用深色主题。",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "用户仍然只使用深色主题。",
+                "layer": "l4_identity",
+                "tags": [
+                  "生命周期"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "SUPERSEDE",
+                "sourceRef": "new-memory",
+                "targetAliases": [
+                  "old"
+                ],
+                "content": "用户只使用深色主题。",
+                "reason": "指标观察哨兵。"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-supersede-tp",
+      "language": "en",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-supersede-tp",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-supersede-tp-primary",
+      "content": "User: I now prefer VS Code.",
+      "idempotencyKey": "op-en-supersede-tp-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "The user prefers Neovim.",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "The user now prefers VS Code.",
+                "layer": "l4_identity",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "SUPERSEDE",
+                "sourceRef": "new-memory",
+                "targetAliases": [
+                  "old"
+                ],
+                "content": "The user prefers VS Code.",
+                "reason": "The current editor preference changed."
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "SUPERSEDE",
+        "targetAliases": [
+          "old"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-supersede-fn",
+      "language": "en",
+      "role": "metric_sentinel",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-supersede-fn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-supersede-fn-primary",
+      "content": "User: The launch is now in November.",
+      "idempotencyKey": "op-en-supersede-fn-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "The launch is scheduled for October.",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "The launch is now in November.",
+                "layer": "l2_fact",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "ADD",
+                "sourceRef": "new-memory"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "SUPERSEDE",
+        "targetAliases": [
+          "old"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-add-tn",
+      "language": "en",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-add-tn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-add-tn-primary",
+      "content": "User: I prefer concise weekly status reports.",
+      "idempotencyKey": "op-en-add-tn-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "The user prefers concise weekly status reports.",
+                "layer": "l4_identity",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "ADD",
+                "sourceRef": "new-memory"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "ADD",
+        "targetAliases": [],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-duplicate-exact",
+      "language": "en",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-duplicate-exact",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-duplicate-exact-primary",
+      "content": "User: The deployment codename is Jade Lantern.",
+      "idempotencyKey": "op-en-duplicate-exact-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "The deployment codename is Jade Lantern.",
+          "layer": "l2_fact"
+        },
+        {
+          "alias": "distractor",
+          "content": "The staging codename is Amber Harbor.",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "The deployment codename is Jade Lantern.",
+                "layer": "l2_fact",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "NOOP",
+                "sourceRef": "new-memory",
+                "duplicateAlias": "old"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-duplicate-paraphrase",
+      "language": "en",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-duplicate-paraphrase",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-duplicate-paraphrase-primary",
+      "content": "User: Please keep using metric units for me.",
+      "idempotencyKey": "op-en-duplicate-paraphrase-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "The user prefers measurements in the metric system.",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "The user prefers metric units.",
+                "layer": "l4_identity",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "NOOP",
+                "sourceRef": "new-memory",
+                "duplicateAlias": "old"
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-consolidate-tn",
+      "language": "en",
+      "role": "conformance",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-consolidate-tn",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-consolidate-tn-primary",
+      "content": "User: I prefer quiet window seats on long flights.",
+      "idempotencyKey": "op-en-consolidate-tn-extract",
+      "setup": [
+        {
+          "alias": "quiet",
+          "content": "The user prefers quiet seats.",
+          "layer": "l4_identity"
+        },
+        {
+          "alias": "window",
+          "content": "The user prefers window seats on long flights.",
+          "layer": "l4_identity"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "new-memory",
+                "content": "The user prefers quiet window seats on long flights.",
+                "layer": "l4_identity",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "CONSOLIDATE",
+                "sourceRefs": [
+                  "new-memory"
+                ],
+                "targetAliases": [
+                  "quiet",
+                  "window"
+                ],
+                "content": "The user prefers quiet window seats on long flights."
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "CONSOLIDATE",
+        "targetAliases": [
+          "quiet",
+          "window"
+        ],
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "op-en-duplicate-fp",
+      "language": "en",
+      "role": "metric_sentinel",
+      "faultScenario": "nominal",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-op-en-duplicate-fp",
+        "agentId": "assistant"
+      },
+      "sessionId": "op-en-duplicate-fp-primary",
+      "content": "User: The billing cycle still closes on Friday.",
+      "idempotencyKey": "op-en-duplicate-fp-extract",
+      "setup": [
+        {
+          "alias": "old",
+          "content": "The billing cycle closes on Friday.",
+          "layer": "l2_fact"
+        }
+      ],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [
+              {
+                "clientRef": "new-memory",
+                "content": "The billing cycle still closes on Friday.",
+                "layer": "l2_fact",
+                "tags": [
+                  "lifecycle"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ],
+            "identities": []
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": [
+              {
+                "type": "SUPERSEDE",
+                "sourceRef": "new-memory",
+                "targetAliases": [
+                  "old"
+                ],
+                "content": "The billing cycle closes on Friday.",
+                "reason": "Metric observer sentinel."
+              }
+            ]
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": true,
+        "duplicate": true,
+        "degradation": true
+      },
+      "expected": {
+        "operation": "NOOP",
+        "targetAliases": [
+          "old"
+        ],
+        "duplicateTargetAlias": "old",
+        "receiptStatus": "completed"
+      }
+    },
+    {
+      "id": "fault-zh-model-extraction",
+      "language": "zh",
+      "role": "fault_injection",
+      "faultScenario": "injected_model_failure",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-zh-model-extraction",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-zh-model-extraction-primary",
+      "content": "用户：记住发票在周一到期。",
+      "idempotencyKey": "fault-zh-model-extraction-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "throw",
+          "errorCode": "scripted_extraction_failure"
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    },
+    {
+      "id": "fault-en-model-reconciliation",
+      "language": "en",
+      "role": "fault_injection",
+      "faultScenario": "injected_model_failure",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-en-model-reconciliation",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-en-model-reconciliation-primary",
+      "content": "The user prefers early morning meetings.",
+      "idempotencyKey": "fault-en-model-reconciliation-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "fault-memory",
+                "content": "The user prefers early morning meetings.",
+                "layer": "l4_identity",
+                "tags": [
+                  "fault"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "throw",
+          "errorCode": "scripted_reconciliation_failure"
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    },
+    {
+      "id": "fault-zh-invalid-json-extraction",
+      "language": "zh",
+      "role": "fault_injection",
+      "faultScenario": "invalid_json",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-zh-invalid-json-extraction",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-zh-invalid-json-extraction-primary",
+      "content": "用户：记住交付日在周三。",
+      "idempotencyKey": "fault-zh-invalid-json-extraction-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "invalid_json",
+          "rawText": "this is not json"
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    },
+    {
+      "id": "fault-en-invalid-json-reconciliation",
+      "language": "en",
+      "role": "fault_injection",
+      "faultScenario": "invalid_json",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-en-invalid-json-reconciliation",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-en-invalid-json-reconciliation-primary",
+      "content": "The user prefers a silent keyboard.",
+      "idempotencyKey": "fault-en-invalid-json-reconciliation-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "fault-memory",
+                "content": "The user prefers a silent keyboard.",
+                "layer": "l4_identity",
+                "tags": [
+                  "fault"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "invalid_json",
+          "rawText": "{not-valid-json"
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    },
+    {
+      "id": "fault-zh-schema-extraction",
+      "language": "zh",
+      "role": "fault_injection",
+      "faultScenario": "schema_failure",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-zh-schema-extraction",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-zh-schema-extraction-primary",
+      "content": "用户：记住维护窗口是周日。",
+      "idempotencyKey": "fault-zh-schema-extraction-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": []
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    },
+    {
+      "id": "fault-en-schema-reconciliation",
+      "language": "en",
+      "role": "fault_injection",
+      "faultScenario": "schema_failure",
+      "owner": {
+        "tenantId": "tenant-lifecycle",
+        "userId": "user-fault-en-schema-reconciliation",
+        "agentId": "assistant"
+      },
+      "sessionId": "fault-en-schema-reconciliation-primary",
+      "content": "The user prefers written design reviews.",
+      "idempotencyKey": "fault-en-schema-reconciliation-extract",
+      "setup": [],
+      "modelScript": [
+        {
+          "phase": "extraction",
+          "outcome": "json",
+          "payload": {
+            "basicProfilePatch": {},
+            "facts": [],
+            "identities": [
+              {
+                "clientRef": "fault-memory",
+                "content": "The user prefers written design reviews.",
+                "layer": "l4_identity",
+                "tags": [
+                  "fault"
+                ],
+                "confidence": 0.95,
+                "evidenceTurnIndexes": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "phase": "reconciliation",
+          "outcome": "json",
+          "payload": {
+            "operations": "not-an-array"
+          }
+        }
+      ],
+      "measurements": {
+        "conflict": false,
+        "duplicate": false,
+        "degradation": true
+      },
+      "expected": {
+        "operation": null,
+        "targetAliases": [],
+        "receiptStatus": "degraded"
+      }
+    }
+  ]
+}
