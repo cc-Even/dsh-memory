@@ -1,6 +1,6 @@
 # @evyn/dsh-memory
 
-> Durable, auditable cross-session memory for [DeepSeek Harness](https://github.com/deepseek-ai).
+> Durable, auditable cross-session memory for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
 English | [简体中文](README.zh.md)
 
@@ -226,8 +226,6 @@ pnpm build
 ```
 
 The test suite covers raw-first idempotent writes, cross-session retrieval, automatic recall, degraded extraction, reconciliation, evidence-aware forgetting, all four model tools, and persistence across a cold Loader restart.
-
-For external Embedding and chat-model connectivity checks, see the [Agent development testing guide](docs/testing-guide.zh.md).
 
 ## Contributing
 
