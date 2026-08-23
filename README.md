@@ -17,7 +17,7 @@ The plugin is built directly on Harness-native lifecycle, LLM, Session, and stor
 - **Raw-first durability** — source content is committed before fallible model extraction begins.
 - **Structured memory layers** — stores basic profile, raw evidence, facts, summaries, and stable identities.
 - **Non-destructive evolution** — duplicate, consolidated, and superseded facts retain provenance and revision links.
-- **Hybrid retrieval** — combines a portable 256-dimensional hash vector, BM25, and reciprocal-rank fusion.
+- **Pluggable hybrid retrieval** — combines either the portable hash space or a trained embedding provider with BM25 and reciprocal-rank fusion.
 - **Automatic capture and recall** — integrates with Harness turn events without replacing the Session log.
 - **Explicit model tools** — provides add, search, list, and forget operations with server-derived scope.
 - **Graceful degradation** — a failed extraction leaves the raw L1 record durable and recallable.
@@ -109,8 +109,35 @@ Once enabled, ordinary conversation is enough. Completed human turns can be capt
 | `tenantId` | `string` | unset | Optional tenant namespace. |
 | `autoCapture` | `boolean` | `true` | Extract durable memory when a direct-human turn stops. |
 | `autoRecall` | `boolean` | `true` | Recall memory before a step containing direct user input. |
+| `embedding` | object | `{ kind: "hash" }` | Portable hash or OpenAI-compatible embedding configuration. |
 
 The bundled patch supplies `provider` and `model` from the current default-model selection. They remain required when the service is mounted directly.
+
+### Embedding providers
+
+The default `HashEmbeddingProvider` is deterministic, offline, and preserves the existing `dsh-memory/hash-token-char-v1/256/l2` space. A loader deployment can opt into a trained OpenAI-compatible endpoint:
+
+```yaml
+- name: '@evyn/dsh-memory'
+  config:
+    provider: deepseek
+    model: deepseek-chat
+    embedding:
+      kind: openai-compatible
+      baseUrl: https://example.invalid/compatible-mode/v1
+      apiKeyEnv: MEMORY_EMBEDDING_API_KEY
+      model: multilingual-embedding-model
+      spaceId: deployment/multilingual-embedding-model/1024/l2
+      dimensions: 1024
+      batchSize: 128
+      timeoutMs: 30000
+      maxRetries: 2
+      retryBaseDelayMs: 100
+```
+
+`apiKeyEnv` names an environment variable; a literal key is rejected and the resolved public configuration never contains the key value. Programmatic consumers may instead supply an `embeddingProvider` implementing `EmbeddingProvider`. The programmatic and loader-configured entries are mutually exclusive.
+
+The core batches sequentially to the advertised provider limit, restores input order, validates count/dimensions/finite non-zero values, and applies final L2 normalization. The reference remote adapter retries only network failures, HTTP 408/429/5xx, and per-attempt timeouts within its configured bounds. Caller cancellation is propagated unchanged.
 
 ### Limits and retrieval policy
 
@@ -200,11 +227,16 @@ With automatic recall enabled, the plugin inserts a bounded, clearly delimited `
 
 With automatic capture enabled, the non-tool transcript from the completed human turn is sent to the configured memory model as untrusted JSON data. Extraction does not alter the answer already in flight. A turn can add one extraction call and, when facts are found, one reconciliation call.
 
+For a remote embedding space, an add still commits the recallable L1 raw record and accepted job before network I/O. That first commit uses a same-space, same-dimension zero placeholder. Successful enrichment replaces it with a validated vector; provider failure marks the job `degraded`, creates no derived records, and leaves the raw text available to lexical recall. Search invokes the provider only after owner/status/visibility/validity/layer/Session filtering; a non-cancellation outage disables only the semantic channel and reports `semantic:provider-unavailable`.
+
+Embedding vectors are deployment data sent to the configured endpoint. Choose an endpoint and retention policy appropriate for the sensitivity of memory content. Keys are read only from the named environment variable and are excluded from descriptors, errors, logs, and evaluation reports.
+
 The default anonymous user ID is a local correlation identity, not authentication or authorization. Deployments handling sensitive or hostile content should provide an authenticated `userId`, review retention policy, and add policy filtering appropriate to their threat model.
 
 ## Current limitations
 
 - The built-in hash embedding is portable and deterministic, but weaker than a trained multilingual embedding model.
+- One non-empty store may contain only its active embedding `spaceId` and dimension. Switching provider/model/dimensions/normalization requires a new `spaceId`; MEM-101 rejects a cold switch or foreign import and does not perform re-embedding. Migration is reserved for MEM-104.
 - Tags participate in lexical text; there is no independent tag index.
 - Each mutation atomically replaces one whole owner-state JSON row, which is not intended for very large corpora.
 - Per-owner serialization is process-local; the storage domain does not provide cross-process compare-and-set.
@@ -223,7 +255,16 @@ pnpm install
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm run eval:embedding
 ```
+
+The offline embedding evaluation builds the package, uses a temporary JSON store and the public `import()`/`search()` API, and performs no network access. A live quality run is deliberately double-gated and reads its endpoint/key from `DASHSCOPE_API_URL` and `DASHSCOPE_API_KEY`:
+
+```sh
+pnpm run eval:embedding:live
+```
+
+The packaged DashScope command fixes the batch size at 16 and `repeat` at 1 for one bounded observation run. Do not run the live command in ordinary tests or CI without explicit network authorization. Its report contains provider/model/space/dimensions and aggregate/case metrics, but no endpoint, key, headers, response bodies, vectors, or temporary paths.
 
 The test suite covers raw-first idempotent writes, cross-session retrieval, automatic recall, degraded extraction, reconciliation, evidence-aware forgetting, all four model tools, and persistence across a cold Loader restart.
 

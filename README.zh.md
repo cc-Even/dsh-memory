@@ -17,7 +17,7 @@
 - **原始证据优先持久化**——在可能失败的模型抽取开始前，先提交来源内容。
 - **结构化记忆分层**——支持基础画像、原始证据、事实、摘要和稳定身份信息。
 - **非破坏式演进**——重复、合并或被取代的事实都会保留来源与版本关系。
-- **混合检索**——组合便携的 256 维哈希向量、BM25 与倒数排名融合。
+- **可替换的混合检索**——将便携哈希空间或训练型 Embedding Provider 与 BM25、倒数排名融合组合。
 - **自动捕获与召回**——接入 Harness Turn 事件，同时保留原有 Session 日志。
 - **显式模型工具**——提供新增、搜索、列出和遗忘操作，作用域由服务端派生。
 - **优雅降级**——抽取失败时，原始 L1 记录仍然持久且可召回。
@@ -109,8 +109,35 @@ Git 安装会运行包的 `prepare` 脚本。如果 `dsh` 提示 pnpm 构建授�
 | `tenantId` | `string` | 未设置 | 可选的租户命名空间。 |
 | `autoCapture` | `boolean` | `true` | 直接用户 Turn 停止时抽取持久记忆。 |
 | `autoRecall` | `boolean` | `true` | 包含直接用户输入的 Step 开始前召回记忆。 |
+| `embedding` | 对象 | `{ kind: "hash" }` | 便携哈希或 OpenAI 兼容 Embedding 配置。 |
 
 bundle patch 会从当前默认模型选择中提供 `provider` 与 `model`；直接挂载服务时，这两个字段仍为必填项。
+
+### Embedding Provider
+
+默认 `HashEmbeddingProvider` 确定、离线，并保持既有 `dsh-memory/hash-token-char-v1/256/l2` 空间。Loader 部署可以显式启用训练型 OpenAI 兼容端点：
+
+```yaml
+- name: '@evyn/dsh-memory'
+  config:
+    provider: deepseek
+    model: deepseek-chat
+    embedding:
+      kind: openai-compatible
+      baseUrl: https://example.invalid/compatible-mode/v1
+      apiKeyEnv: MEMORY_EMBEDDING_API_KEY
+      model: multilingual-embedding-model
+      spaceId: deployment/multilingual-embedding-model/1024/l2
+      dimensions: 1024
+      batchSize: 128
+      timeoutMs: 30000
+      maxRetries: 2
+      retryBaseDelayMs: 100
+```
+
+`apiKeyEnv` 只指定环境变量名；字面量密钥会被拒绝，解析后的公开配置也不会包含密钥值。程序化消费者可以改为传入实现 `EmbeddingProvider` 的 `embeddingProvider`；程序化入口与 Loader 配置入口互斥。
+
+核心按 provider 声明的上限顺序分批，保持输入输出顺序，校验数量、维度、有限非零数值，并执行最终 L2 归一化。参考远端适配器只在网络故障、HTTP 408/429/5xx 和单次超时时按配置上限重试；调用方取消会保持原始原因向上传递。
 
 ### 限制与检索策略
 
@@ -200,11 +227,16 @@ const result = await ctx.memory.search({
 
 启用自动捕获后，已完成用户 Turn 中的非工具对话会作为不可信 JSON 数据发送给配置的记忆模型。抽取不会改变已经在生成中的回答。每个 Turn 会增加一次抽取调用；发现事实时，还会再增加一次调和调用。
 
+使用远端 embedding 空间时，新增操作仍会在任何网络 I/O 前提交可召回的 L1 原始记录与 `accepted` 作业。首次提交使用同空间、同维度的零向量占位；增强成功后替换为已校验向量。Provider 失败会把作业标为 `degraded`、不创建派生记录，并保留可通过词法通道召回的原文。搜索只在按 owner、状态、可见性、有效期、层级和 Session 完成过滤后调用 provider；非取消故障只关闭语义通道，并报告 `semantic:provider-unavailable`。
+
+记忆内容会被发送到所配置的 embedding 端点。部署者应根据内容敏感程度选择端点及保留策略。密钥只从命名环境变量读取，不会进入 descriptor、错误、日志或评测报告。
+
 默认匿名用户 ID 只是本地关联身份，不代表认证或授权。处理敏感或敌意内容的部署应提供经过认证的 `userId`，审查数据保留策略，并按自身威胁模型增加内容策略过滤。
 
 ## 当前限制
 
 - 内建哈希嵌入可移植且确定，但弱于经过训练的多语言嵌入模型。
+- 一个非空存储只能使用活动的 embedding `spaceId` 与维度。切换 provider、模型、维度或归一化方式必须使用新 `spaceId`；MEM-101 会拒绝冷切换和异空间导入，不执行重嵌入，迁移留给 MEM-104。
 - 标签会参与词法文本检索，但目前没有独立标签索引。
 - 每次变更都会原子替换一个所有者的整行 JSON 状态，不适合超大规模语料。
 - 按所有者串行化仅限单进程；storage domain 尚不提供跨进程 compare-and-set。
@@ -223,7 +255,16 @@ pnpm install
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm run eval:embedding
 ```
+
+离线 Embedding 评测会先构建产物，再使用临时 JSON 存储以及公共 `import()`/`search()` API，全程不访问网络。Live 质量评测具有显式双重授权，并从 `DASHSCOPE_API_URL` 与 `DASHSCOPE_API_KEY` 读取端点和密钥：
+
+```sh
+pnpm run eval:embedding:live
+```
+
+该 DashScope 脚本固定批量大小为 16、`repeat` 为 1，用于一次有界观测运行。不要在未明确授权网络访问时把 live 命令用于普通测试或 CI。报告会包含 provider、模型、空间、维度及聚合/逐例指标，但不会包含端点、密钥、请求头、响应体、向量或临时路径。
 
 测试覆盖原始证据优先的幂等写入、跨会话检索、自动召回、抽取降级、记忆调和、证据感知遗忘、四个模型工具，以及 Loader 冷重启后的持久化。
 

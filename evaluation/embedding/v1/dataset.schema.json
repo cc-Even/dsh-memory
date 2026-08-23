@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-memory.invalid/evaluation/embedding/v1/dataset.schema.json",
+  "title": "dsh-memory MEM-101 embedding evaluation dataset v1",
+  "description": "The runner additionally checks global ID uniqueness, reference integrity, balanced synonym/exact language cells, baseline/holdout coverage, stable owners, and label independence from searchable tags.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "datasetId",
+    "datasetVersion",
+    "referenceCommit",
+    "evaluationTime",
+    "records",
+    "queries"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetId": { "const": "dsh-memory-embedding" },
+    "datasetVersion": { "const": "1.0.0" },
+    "referenceCommit": {
+      "const": "cf9234c4038289f966deef1303edb8a03635da97",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "evaluationTime": { "type": "string", "format": "date-time" },
+    "records": {
+      "type": "array",
+      "minItems": 29,
+      "items": { "$ref": "#/$defs/record" }
+    },
+    "queries": {
+      "type": "array",
+      "minItems": 26,
+      "items": { "$ref": "#/$defs/query" }
+    }
+  },
+  "$defs": {
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "userId", "agentId"],
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "language",
+        "owner",
+        "sourceSessionId",
+        "content",
+        "tags",
+        "status",
+        "visibility",
+        "createdAt"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "language": { "enum": ["zh", "en"] },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sourceSessionId": { "type": "string", "minLength": 1 },
+        "content": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "maxItems": 0,
+          "description": "Search labels are deliberately absent so relevant IDs cannot leak into ranking.",
+          "items": { "type": "string" }
+        },
+        "status": { "enum": ["active", "deleted"] },
+        "visibility": { "enum": ["recallable", "source_only"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "language",
+        "bucket",
+        "split",
+        "owner",
+        "sessionId",
+        "query",
+        "relevantIds",
+        "forbiddenIds"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "language": { "enum": ["zh", "en"] },
+        "bucket": { "enum": ["synonym", "exact"] },
+        "split": { "enum": ["baseline", "holdout"] },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1 },
+        "relevantIds": { "$ref": "#/$defs/idArray" },
+        "forbiddenIds": { "$ref": "#/$defs/idArray" }
+      }
+    }
+  }
+}

@@ -15,6 +15,12 @@ import type { Message } from '@deepseek-ai/dsh-llm'
 import { deriveEventMessage } from '@deepseek-ai/dsh-session/surface'
 import type { JsonValue, SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
+import {
+  EmbeddingProvider,
+  HashEmbeddingProvider,
+  OpenAICompatibleEmbeddingProvider,
+} from './embedding.ts'
+import type { EmbeddingDescription } from './embedding.ts'
 import { MemoryError } from './error.ts'
 import { extractMemories, reconcileMemories } from './model.ts'
 import type { ExtractedMemory, ExtractionResult, ReconcileOperation } from './model.ts'
@@ -50,6 +56,15 @@ import type {
 
 export { MemoryError } from './error.ts'
 export type { MemoryErrorCode } from './error.ts'
+export {
+  EmbeddingProvider,
+  HashEmbeddingProvider,
+  OpenAICompatibleEmbeddingProvider,
+} from './embedding.ts'
+export type {
+  EmbeddingDescription,
+  OpenAICompatibleEmbeddingOptions,
+} from './embedding.ts'
 export type * from './types.ts'
 export {
   HASH_EMBEDDING_DIMENSIONS,
@@ -67,6 +82,22 @@ declare module '@deepseek-ai/cordis' {
     memory: MemoryService
   }
 }
+
+/** Loader-selectable embedding implementation. Secrets are referenced by environment-variable name. */
+export type EmbeddingConfig =
+  | { readonly kind: 'hash' }
+  | {
+    readonly kind: 'openai-compatible'
+    readonly baseUrl: string
+    readonly apiKeyEnv: string
+    readonly model: string
+    readonly spaceId: string
+    readonly dimensions: number
+    readonly batchSize?: number
+    readonly timeoutMs?: number
+    readonly maxRetries?: number
+    readonly retryBaseDelayMs?: number
+  }
 
 /** Deployment configuration for extraction, hybrid recall, and automatic turn integration. */
 export interface Config {
@@ -106,9 +137,23 @@ export interface Config {
   bm25B?: number
   /** L0 keys the extractor may update. */
   profileFields?: string[]
+  /** Programmatic embedding provider; mutually exclusive with `embedding`. */
+  embeddingProvider?: EmbeddingProvider
+  /** Loader-safe embedding configuration. The default is the portable hash provider. */
+  embedding?: EmbeddingConfig
 }
 
-interface ResolvedConfig {
+type ResolvedEmbeddingConfig = EmbeddingConfig | {
+  readonly kind: 'programmatic'
+  readonly spaceId: string
+  readonly dimensions: number
+  readonly maxBatchSize: number
+  readonly normalization: 'l2'
+  readonly quality: 'portable-hash' | 'trained'
+}
+
+/** Fully materialized, secret-free service policy. */
+export interface ResolvedConfig {
   readonly provider: string
   readonly model: string
   readonly userId: string
@@ -127,6 +172,7 @@ interface ResolvedConfig {
   readonly bm25K1: number
   readonly bm25B: number
   readonly profileFields: readonly string[]
+  readonly embedding: ResolvedEmbeddingConfig
 }
 
 const DEFAULT_PROFILE_FIELDS = ['name', 'age', 'location', 'timezone', 'language', 'occupation']
@@ -155,6 +201,22 @@ export const Config: s<Config> = s.object({
   bm25K1: s.number().min(0).default(1.5),
   bm25B: s.number().min(0).max(1).default(0.75),
   profileFields: s.array(s.string()).default(DEFAULT_PROFILE_FIELDS),
+  embeddingProvider: s.any<EmbeddingProvider>().hidden(),
+  embedding: s.union([
+    s.object({ kind: s.const('hash').required() }),
+    s.object({
+      kind: s.const('openai-compatible').required(),
+      baseUrl: s.string().required(),
+      apiKeyEnv: s.string().required(),
+      model: s.string().required(),
+      spaceId: s.string().required(),
+      dimensions: s.number().step(1).min(1).required(),
+      batchSize: s.number().step(1).min(1),
+      timeoutMs: s.number().step(1).min(1),
+      maxRetries: s.number().step(1).min(0),
+      retryBaseDelayMs: s.number().step(1).min(1),
+    }),
+  ]),
 })
 
 /**
@@ -163,11 +225,17 @@ export const Config: s<Config> = s.object({
  * @returns a validated configuration with every default materialized.
  */
 export function resolveConfig(config: Config): ResolvedConfig {
+  if (config.embeddingProvider !== undefined && config.embedding !== undefined) {
+    throw new MemoryError('INVALID_INPUT', 'embeddingProvider and embedding config are mutually exclusive')
+  }
   const provider = requireNonEmpty(config.provider, 'provider')
   const model = requireNonEmpty(config.model, 'model')
   const userId = config.userId === undefined
     ? getOrCreateAnonymousUserId()
     : requireNonEmpty(config.userId, 'userId')
+  const embedding = config.embeddingProvider === undefined
+    ? normalizeEmbeddingConfig(config.embedding)
+    : programmaticEmbeddingConfig(describeEmbeddingProvider(config.embeddingProvider))
   const resolved: ResolvedConfig = {
     provider,
     model,
@@ -187,12 +255,110 @@ export function resolveConfig(config: Config): ResolvedConfig {
     bm25K1: bounded(config.bm25K1 ?? 1.5, 0, Number.MAX_VALUE, 'bm25K1'),
     bm25B: bounded(config.bm25B ?? 0.75, 0, 1, 'bm25B'),
     profileFields: normalizeTags(config.profileFields ?? DEFAULT_PROFILE_FIELDS),
+    embedding,
   }
   return resolved
 }
 
 function modelRoute(config: ResolvedConfig): { provider: string; model: string; maxTokens: number } {
   return { provider: config.provider, model: config.model, maxTokens: config.maxModelTokens }
+}
+
+function normalizeEmbeddingConfig(value: EmbeddingConfig | undefined): EmbeddingConfig {
+  if (value === undefined) return { kind: 'hash' }
+  if (value === null || typeof value !== 'object') {
+    throw new MemoryError('INVALID_INPUT', 'embedding config must be an object')
+  }
+  const input = value as EmbeddingConfig & { readonly apiKey?: unknown }
+  if (input.kind === 'hash') {
+    assertAllowedKeys(input, ['kind'], 'embedding')
+    return { kind: 'hash' }
+  }
+  if (input.kind !== 'openai-compatible') {
+    throw new MemoryError('INVALID_INPUT', 'embedding kind is invalid')
+  }
+  if ('apiKey' in input) {
+    throw new MemoryError('INVALID_INPUT', 'embedding config must use apiKeyEnv instead of a literal apiKey')
+  }
+  assertAllowedKeys(input, [
+    'kind', 'baseUrl', 'apiKeyEnv', 'model', 'spaceId', 'dimensions', 'batchSize', 'timeoutMs',
+    'maxRetries', 'retryBaseDelayMs',
+  ], 'embedding')
+  const baseUrl = requireHttpUrl(input.baseUrl, 'embedding.baseUrl')
+  const apiKeyEnv = requireNonEmpty(input.apiKeyEnv, 'embedding.apiKeyEnv')
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(apiKeyEnv)) {
+    throw new MemoryError('INVALID_INPUT', 'embedding.apiKeyEnv must be an environment variable name')
+  }
+  return {
+    kind: 'openai-compatible',
+    baseUrl,
+    apiKeyEnv,
+    model: requireNonEmpty(input.model, 'embedding.model'),
+    spaceId: requireNonEmpty(input.spaceId, 'embedding.spaceId'),
+    dimensions: boundedInteger(input.dimensions, 1, 65_536, 'embedding.dimensions'),
+    batchSize: boundedInteger(input.batchSize ?? 128, 1, 2_048, 'embedding.batchSize'),
+    timeoutMs: boundedInteger(input.timeoutMs ?? 30_000, 1, 300_000, 'embedding.timeoutMs'),
+    maxRetries: boundedInteger(input.maxRetries ?? 2, 0, 10, 'embedding.maxRetries'),
+    retryBaseDelayMs: boundedInteger(input.retryBaseDelayMs ?? 100, 1, 60_000, 'embedding.retryBaseDelayMs'),
+  }
+}
+
+function programmaticEmbeddingConfig(description: EmbeddingDescription): ResolvedEmbeddingConfig {
+  return { kind: 'programmatic', ...description }
+}
+
+function assertAllowedKeys(value: object, allowed: readonly string[], field: string): void {
+  const accepted = new Set(allowed)
+  const unexpected = Object.keys(value).find(key => !accepted.has(key))
+  if (unexpected !== undefined) throw new MemoryError('INVALID_INPUT', `${field} has invalid property '${unexpected}'`)
+}
+
+function providerFromConfig(config: ResolvedEmbeddingConfig): EmbeddingProvider {
+  if (config.kind === 'hash') return new HashEmbeddingProvider()
+  if (config.kind === 'programmatic') {
+    throw new MemoryError('EMBEDDING_FAILED', 'programmatic embedding provider is missing')
+  }
+  const apiKey = process.env[config.apiKeyEnv]
+  if (apiKey === undefined || apiKey.trim().length === 0) {
+    throw new MemoryError('INVALID_INPUT', `embedding API key environment variable '${config.apiKeyEnv}' is missing`)
+  }
+  return new OpenAICompatibleEmbeddingProvider({
+    baseUrl: config.baseUrl,
+    apiKey,
+    model: config.model,
+    spaceId: config.spaceId,
+    dimensions: config.dimensions,
+    ...(config.batchSize === undefined ? {} : { batchSize: config.batchSize }),
+    ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+    ...(config.maxRetries === undefined ? {} : { maxRetries: config.maxRetries }),
+    ...(config.retryBaseDelayMs === undefined ? {} : { retryBaseDelayMs: config.retryBaseDelayMs }),
+  })
+}
+
+function describeEmbeddingProvider(provider: EmbeddingProvider): EmbeddingDescription {
+  try {
+    return validateEmbeddingDescription(provider.describe())
+  } catch {
+    throw new MemoryError('EMBEDDING_FAILED', 'embedding provider descriptor is invalid')
+  }
+}
+
+function validateEmbeddingDescription(value: EmbeddingDescription): EmbeddingDescription {
+  if (value === null || typeof value !== 'object'
+    || typeof value.spaceId !== 'string' || value.spaceId.trim().length === 0
+    || !Number.isSafeInteger(value.dimensions) || value.dimensions < 1 || value.dimensions > 65_536
+    || !Number.isSafeInteger(value.maxBatchSize) || value.maxBatchSize < 1
+    || value.normalization !== 'l2'
+    || (value.quality !== 'portable-hash' && value.quality !== 'trained')) {
+    throw new MemoryError('EMBEDDING_FAILED', 'embedding provider descriptor is invalid')
+  }
+  return {
+    spaceId: value.spaceId.trim(),
+    dimensions: value.dimensions,
+    maxBatchSize: value.maxBatchSize,
+    normalization: 'l2',
+    quality: value.quality,
+  }
 }
 
 /** Durable memory service mounted at `ctx.memory`. */
@@ -203,6 +369,9 @@ export class MemoryService extends Service implements MemoryCapability {
   /** Validated immutable policy used by writes, retrieval, and turn hooks. */
   readonly config: ResolvedConfig
 
+  private readonly embeddingProvider: EmbeddingProvider
+  private readonly embeddingDescription: EmbeddingDescription
+  private readonly portableHashImplementation: boolean
   private table?: KvTable<MemoryScopeKey, MemoryScopeState>
   private readonly operationTails = new Map<MemoryScopeKey, Promise<void>>()
   private admissionOpen = true
@@ -214,12 +383,19 @@ export class MemoryService extends Service implements MemoryCapability {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'memory')
     this.config = resolveConfig(config)
+    this.embeddingProvider = config.embeddingProvider ?? providerFromConfig(this.config.embedding)
+    this.embeddingDescription = describeEmbeddingProvider(this.embeddingProvider)
+    this.portableHashImplementation = this.embeddingProvider instanceof HashEmbeddingProvider
+      && this.embeddingDescription.quality === 'portable-hash'
+      && this.embeddingDescription.spaceId === HASH_EMBEDDING_SPACE_ID
+      && this.embeddingDescription.dimensions === HASH_EMBEDDING_DIMENSIONS
   }
 
   /** Open durable state, recover interrupted jobs, and install optional turn hooks. */
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(memoryDomainSpec)
     this.table = domain.table('scopes')
+    this.validateStoredEmbeddingSpaces()
     await this.recoverAcceptedJobs()
     this.installHooks()
     this.ctx.effect(() => async () => {
@@ -289,34 +465,37 @@ export class MemoryService extends Service implements MemoryCapability {
         records: [...current.records, raw],
         jobs: [...current.jobs, job],
       }
+      let completionAttempted = false
       try {
         await this.writeState(key, current, accepted)
       } catch (error) {
         throw new MemoryError('RAW_PERSIST_FAILED', 'memory raw record could not be persisted', { cause: error })
       }
 
-      if (resolved.mode === 'direct') {
-        const directContent = resolved.content.slice(0, this.config.maxRecordChars).trim()
-        const derived = this.record({
-          scope: resolved.scope,
-          layer: resolved.layer,
-          content: directContent,
-          visibility: 'recallable',
-          sourceType: 'explicit',
-          confidence: 1,
-          ...(resolved.occurredAt === undefined ? {} : { occurredAt: resolved.occurredAt }),
-          sourceMemoryIds: [raw.id],
-          sourceTurnIndexes: resolved.sourceTurnIndexes,
-          tags: resolved.tags,
-          now,
-        })
-        const records = accepted.records.map(record => record.id === raw.id
-          ? { ...record, visibility: 'source_only' as const, updatedAt: now }
-          : record)
-        return await this.commitSuccess(key, accepted, job, raw.id, [...records, derived])
-      }
-
       try {
+        if (resolved.mode === 'direct') {
+          const directContent = resolved.content.slice(0, this.config.maxRecordChars).trim()
+          const derived = this.record({
+            scope: resolved.scope,
+            layer: resolved.layer,
+            content: directContent,
+            visibility: 'recallable',
+            sourceType: 'explicit',
+            confidence: 1,
+            ...(resolved.occurredAt === undefined ? {} : { occurredAt: resolved.occurredAt }),
+            sourceMemoryIds: [raw.id],
+            sourceTurnIndexes: resolved.sourceTurnIndexes,
+            tags: resolved.tags,
+            now,
+          })
+          const records = accepted.records.map(record => record.id === raw.id
+            ? { ...record, visibility: 'source_only' as const, updatedAt: now }
+            : record)
+          const embedded = await this.embedSelectedRecords([...records, derived], [raw.id, derived.id], signal)
+          completionAttempted = true
+          return await this.commitSuccess(key, accepted, job, raw.id, embedded)
+        }
+
         throwIfAborted(signal)
         const extraction = await extractMemories(
           this.ctx,
@@ -327,13 +506,18 @@ export class MemoryService extends Service implements MemoryCapability {
           signal,
         )
         const extracted = this.sanitizeExtraction(extraction)
-        const candidates = this.reconcileCandidates(accepted.records, extracted)
+        const candidates = await this.reconcileCandidates(accepted.records, extracted, signal)
         const operations = extracted.length === 0
           ? []
           : await reconcileMemories(this.ctx, modelRoute(this.config), extracted, candidates, signal)
         const records = this.applyExtraction(accepted.records, raw, extraction, extracted, candidates, operations, now)
-        return await this.commitSuccess(key, accepted, job, raw.id, records)
+        const acceptedIds = new Set(accepted.records.map(record => record.id))
+        const embeddingIds = [raw.id, ...records.filter(record => !acceptedIds.has(record.id)).map(record => record.id)]
+        const embedded = await this.embedSelectedRecords(records, embeddingIds, signal)
+        completionAttempted = true
+        return await this.commitSuccess(key, accepted, job, raw.id, embedded)
       } catch (error) {
+        if (completionAttempted) throw error
         const warning = error instanceof Error ? error.message : String(error)
         const degradedJob: StoredMemoryJob = { ...job, status: 'degraded', warnings: [warning] }
         const degraded: MemoryScopeState = {
@@ -354,7 +538,7 @@ export class MemoryService extends Service implements MemoryCapability {
    * @param signal - Cancellation checked before CPU work.
    * @returns ranked profile and normal channels.
    */
-  search(input: SearchMemoryInput, signal?: AbortSignal): Promise<SearchResult> {
+  async search(input: SearchMemoryInput, signal?: AbortSignal): Promise<SearchResult> {
     throwIfAborted(signal)
     const scope = resolveScope(input.scope)
     const query = requireNonEmpty(input.query, 'query')
@@ -371,25 +555,41 @@ export class MemoryService extends Service implements MemoryCapability {
       && (!input.sessionOnly || record.scope.sessionId === scope.sessionId)
       && validAt(record, new Date().toISOString()))
     const intent = classifyIntent(query)
+    let queryVector: readonly number[] | undefined
+    let semanticUnavailable = false
+    if (candidates.length > 0) {
+      try {
+        queryVector = this.portableHashImplementation
+          ? hashEmbedding(query)
+          : requiredArrayValue(await this.embedTexts([query], signal), 0, 'query embedding')
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error
+        semanticUnavailable = true
+      }
+    }
     const profileCandidates = candidates.filter(record => PROFILE_LAYERS.has(record.layer))
-    const profile = this.rank(query, intent, profileCandidates, input.includeEvolution ?? false, state.records)
+    const profile = this.rank(query, queryVector, intent, profileCandidates, input.includeEvolution ?? false, state.records)
       .slice(0, profileLimit)
       .map(hit => ({ ...hit, matchedBy: [...hit.matchedBy, 'profile' as const] }))
     const normalCandidates = candidates.filter(record => !PROFILE_LAYERS.has(record.layer))
-    const normal = this.rank(query, intent, normalCandidates, input.includeEvolution ?? false, state.records)
+    const normal = this.rank(query, queryVector, intent, normalCandidates, input.includeEvolution ?? false, state.records)
       .slice(0, limit)
     const scores = [...profile, ...normal].slice(0, 3).map(hit => hit.score)
     const scoreAverage = scores.reduce((sum, score) => sum + score, 0) / scores.length
     const confidence = scores.length === 0 ? 0 : Math.min(1, scoreAverage * this.config.rrfK)
-    return Promise.resolve({
+    return {
       requestId: randomUUID(),
       channels: { profile, normal },
       diagnostics: {
         intent,
         confidence,
-        degradedChannels: ['semantic:portable-hash', 'tag:unavailable'],
+        degradedChannels: [
+          ...(semanticUnavailable ? ['semantic:provider-unavailable'] : []),
+          ...(this.embeddingDescription.quality === 'portable-hash' ? ['semantic:portable-hash'] : []),
+          'tag:unavailable',
+        ],
       },
-    })
+    }
   }
 
   /**
@@ -448,7 +648,7 @@ export class MemoryService extends Service implements MemoryCapability {
           : { ...record, sourceMemoryIds, updatedAt: now }
       })
       const next = { ...current, revision: current.revision + 1, records }
-      validateState(next)
+      validateState(next, this.embeddingDescription)
       await this.writeState(key, current, next)
       return { forgotten: true, memoryId, affectedMemoryIds: [...affected] }
     })
@@ -479,7 +679,7 @@ export class MemoryService extends Service implements MemoryCapability {
       const byId = new Map(current.records.map(record => [record.id, record]))
       let inserted = 0
       for (const record of records) {
-        assertRecordImport(record, resolved)
+        assertRecordImport(record, resolved, this.embeddingDescription)
         const existing = byId.get(record.id)
         if (existing !== undefined) {
           if (JSON.stringify(existing) !== JSON.stringify(record)) {
@@ -492,7 +692,7 @@ export class MemoryService extends Service implements MemoryCapability {
       }
       if (inserted === 0) return 0
       const next = { ...current, revision: current.revision + 1, records: [...byId.values()] }
-      validateState(next)
+      validateState(next, this.embeddingDescription)
       await this.writeState(key, current, next)
       return inserted
     })
@@ -510,7 +710,7 @@ export class MemoryService extends Service implements MemoryCapability {
       ready: true,
       records,
       scopes: table.size,
-      embeddingSpaceId: HASH_EMBEDDING_SPACE_ID,
+      embeddingSpaceId: this.embeddingDescription.spaceId,
       capabilities: {
         transactions: true,
         semanticSearch: true,
@@ -605,13 +805,30 @@ export class MemoryService extends Service implements MemoryCapability {
     return sanitized.filter(item => item.content.length > 0)
   }
 
-  private reconcileCandidates(records: readonly MemoryRecord[], extracted: readonly ExtractedMemory[]): MemoryRecord[] {
+  private async reconcileCandidates(
+    records: readonly MemoryRecord[],
+    extracted: readonly ExtractedMemory[],
+    signal?: AbortSignal,
+  ): Promise<MemoryRecord[]> {
     const query = extracted.map(item => item.content).join('\n')
     if (query.length === 0) return []
+    const candidates = records.filter(record => record.status === 'active'
+      && record.visibility === 'recallable'
+      && (record.layer === 'l2_fact' || record.layer === 'l4_identity'))
+    if (candidates.length === 0) return []
+    let queryVector: readonly number[] | undefined
+    try {
+      queryVector = this.portableHashImplementation
+        ? hashEmbedding(query)
+        : requiredArrayValue(await this.embedTexts([query], signal), 0, 'reconcile query embedding')
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error
+    }
     return this.rank(
       query,
+      queryVector,
       classifyIntent(query),
-      records.filter(record => record.status === 'active' && record.visibility === 'recallable' && (record.layer === 'l2_fact' || record.layer === 'l4_identity')),
+      candidates,
       false,
       records,
     ).slice(0, this.config.reconcileCandidateLimit).map(hit => hit.memory)
@@ -768,16 +985,20 @@ export class MemoryService extends Service implements MemoryCapability {
 
   private rank(
     query: string,
+    queryVector: readonly number[] | undefined,
     intent: ReturnType<typeof classifyIntent>,
     records: readonly MemoryRecord[],
     includeEvolution: boolean,
     allRecords: readonly MemoryRecord[],
   ): MemoryHit[] {
     if (records.length === 0) return []
-    const queryVector = hashEmbedding(query)
-    const semantic = records.map(record => ({ record, score: cosine(queryVector, record.embedding.vector) }))
-      .filter(entry => entry.score >= this.config.minSemanticScore)
-      .sort((left, right) => right.score - left.score)
+    const semantic = queryVector === undefined
+      ? []
+      : records
+        .filter(record => hasNonZeroVector(record.embedding.vector))
+        .map(record => ({ record, score: cosine(queryVector, record.embedding.vector) }))
+        .filter(entry => entry.score >= this.config.minSemanticScore)
+        .sort((left, right) => right.score - left.score)
     const lexicalScores = bm25(tokenize(query), records.map(record => `${record.content}\n${record.tags.join(' ')}`), this.config.bm25K1, this.config.bm25B)
     const lexical = records.map((record, index) => ({ record, score: lexicalScores[index] ?? 0 }))
       .filter(entry => entry.score > 0)
@@ -840,11 +1061,71 @@ export class MemoryService extends Service implements MemoryCapability {
       tags: normalizeTags(input.tags ?? []),
       meta: input.meta ?? {},
       embedding: {
-        spaceId: HASH_EMBEDDING_SPACE_ID,
-        dimensions: HASH_EMBEDDING_DIMENSIONS,
-        vector: hashEmbedding(content),
+        spaceId: this.embeddingDescription.spaceId,
+        dimensions: this.embeddingDescription.dimensions,
+        vector: this.portableHashImplementation
+          ? hashEmbedding(content)
+          : Array<number>(this.embeddingDescription.dimensions).fill(0),
       },
     }
+  }
+
+  private async embedSelectedRecords(
+    records: readonly MemoryRecord[],
+    ids: readonly MemoryId[],
+    signal?: AbortSignal,
+  ): Promise<readonly MemoryRecord[]> {
+    if (this.portableHashImplementation || ids.length === 0) return records
+    const selected = ids.map(id => {
+      const record = records.find(candidate => candidate.id === id)
+      if (record === undefined) throw new MemoryError('EMBEDDING_FAILED', 'embedding target record is missing')
+      return record
+    })
+    const vectors = await this.embedTexts(selected.map(record => record.content), signal)
+    const byId = new Map(selected.map((record, index) => [record.id, requiredArrayValue(vectors, index, 'record embedding')]))
+    return records.map((record): MemoryRecord => {
+      const vector = byId.get(record.id)
+      return vector === undefined ? record : {
+        ...record,
+        embedding: {
+          spaceId: this.embeddingDescription.spaceId,
+          dimensions: this.embeddingDescription.dimensions,
+          vector,
+        },
+      }
+    })
+  }
+
+  private async embedTexts(texts: readonly string[], signal?: AbortSignal): Promise<readonly (readonly number[])[]> {
+    if (texts.length === 0) return []
+    const vectors: number[][] = []
+    for (let offset = 0; offset < texts.length; offset += this.embeddingDescription.maxBatchSize) {
+      throwIfAborted(signal)
+      const batch = texts.slice(offset, offset + this.embeddingDescription.maxBatchSize)
+      let result: readonly (readonly number[])[]
+      try {
+        result = await this.embeddingProvider.embedBatch(batch, signal)
+        throwIfAborted(signal)
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error
+        throw new MemoryError('EMBEDDING_FAILED', 'embedding provider failed')
+      }
+      if (!Array.isArray(result) || result.length !== batch.length) {
+        throw new MemoryError('EMBEDDING_FAILED', 'embedding provider returned an invalid result count')
+      }
+      for (const vector of result) {
+        if (!Array.isArray(vector) || vector.length !== this.embeddingDescription.dimensions
+          || vector.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
+          throw new MemoryError('EMBEDDING_FAILED', 'embedding provider returned an invalid vector')
+        }
+        const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
+        if (!Number.isFinite(norm) || norm === 0) {
+          throw new MemoryError('EMBEDDING_FAILED', 'embedding provider returned a zero vector')
+        }
+        vectors.push(vector.map(value => value / norm))
+      }
+    }
+    return vectors
   }
 
   private async commitSuccess(
@@ -863,7 +1144,7 @@ export class MemoryService extends Service implements MemoryCapability {
     }
     const raw = next.records.find(record => record.id === rawId)
     if (raw === undefined) throw new MemoryError('CONCURRENT_MODIFICATION', 'raw memory disappeared before enrichment commit')
-    validateState(next)
+    validateState(next, this.embeddingDescription)
     await this.writeState(key, current, next)
     return receiptOf(completedJob)
   }
@@ -878,7 +1159,7 @@ export class MemoryService extends Service implements MemoryCapability {
     if ((live?.revision ?? 0) !== expected.revision) {
       throw new MemoryError('CONCURRENT_MODIFICATION', `memory scope revision changed from ${expected.revision}`)
     }
-    validateState(next)
+    validateState(next, this.embeddingDescription)
     if (live === undefined) await table.put(key, next)
     else await table.update(key, (current) => {
       if (current.revision !== expected.revision) {
@@ -909,6 +1190,10 @@ export class MemoryService extends Service implements MemoryCapability {
         : job)
       await table.update(key, current => ({ ...current, revision: current.revision + 1, jobs }))
     }
+  }
+
+  private validateStoredEmbeddingSpaces(): void {
+    for (const [, state] of this.requireTable().entries()) validateState(state, this.embeddingDescription)
   }
 
   private requireTable(): KvTable<MemoryScopeKey, MemoryScopeState> {
@@ -944,14 +1229,26 @@ function validatePlan(
   if (covered.size !== refs.size) throw new MemoryError('RECONCILE_FAILED', 'reconcile plan did not cover every extracted memory')
 }
 
-function validateState(state: MemoryScopeState): void {
+function validateState(state: MemoryScopeState, description: EmbeddingDescription): void {
   const violation = findMemoryStateViolation(state.records)
   if (violation !== undefined) throw new MemoryError('CONCURRENT_MODIFICATION', violation)
 
   for (const record of state.records) {
     if (!WRITABLE_LAYERS.has(record.layer)) throw new MemoryError('INVALID_INPUT', `reserved memory layer '${record.layer}' cannot be stored by this provider`)
-    if (record.embedding.spaceId !== HASH_EMBEDDING_SPACE_ID || record.embedding.dimensions !== HASH_EMBEDDING_DIMENSIONS) {
+    if (record.embedding.spaceId !== description.spaceId
+      || record.embedding.dimensions !== description.dimensions
+      || record.embedding.vector.length !== description.dimensions) {
       throw new MemoryError('EMBEDDING_SPACE_MISMATCH', `memory '${record.id}' uses embedding space '${record.embedding.spaceId}'`)
+    }
+    if (description.quality === 'trained'
+      && !hasNonZeroVector(record.embedding.vector)
+      && !state.jobs.some(job => job.rawMemoryId === record.id
+        && record.layer === 'l1_raw'
+        && (job.status === 'accepted' || job.status === 'degraded'))) {
+      throw new MemoryError(
+        'EMBEDDING_SPACE_MISMATCH',
+        `memory '${record.id}' has no valid trained embedding or durable placeholder job`,
+      )
     }
   }
 }
@@ -1037,12 +1334,18 @@ function sameOwner(left: MemoryScope, right: MemoryScope): boolean {
   return left.tenantId === right.tenantId && left.userId === right.userId && left.agentId === right.agentId
 }
 
-function assertRecordImport(record: MemoryRecord, scope: MemoryScope): void {
+function assertRecordImport(
+  record: MemoryRecord,
+  scope: MemoryScope,
+  description: EmbeddingDescription,
+): void {
   if (!sameOwner(record.scope, scope)) {
     throw new MemoryError('INVALID_INPUT', `imported memory '${record.id}' does not belong to the target scope`)
   }
   if (!WRITABLE_LAYERS.has(record.layer)) throw new MemoryError('INVALID_INPUT', `reserved memory layer '${record.layer}' cannot be imported`)
-  if (record.embedding.spaceId !== HASH_EMBEDDING_SPACE_ID || record.embedding.dimensions !== HASH_EMBEDDING_DIMENSIONS) {
+  if (record.embedding.spaceId !== description.spaceId
+    || record.embedding.dimensions !== description.dimensions
+    || record.embedding.vector.length !== description.dimensions) {
     throw new MemoryError('EMBEDDING_SPACE_MISMATCH', `imported memory '${record.id}' requires re-embedding`)
   }
 }
@@ -1050,6 +1353,17 @@ function assertRecordImport(record: MemoryRecord, scope: MemoryScope): void {
 function requireNonEmpty(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw new MemoryError('INVALID_INPUT', `${field} must be a non-empty string`)
   return value.trim()
+}
+
+function requireHttpUrl(value: unknown, field: string): string {
+  const text = requireNonEmpty(value, field).replace(/\/+$/u, '')
+  try {
+    const parsed = new URL(text)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error()
+  } catch {
+    throw new MemoryError('INVALID_INPUT', `${field} must be an absolute HTTP(S) URL`)
+  }
+  return text
 }
 
 function requiredMapValue<K, V>(map: ReadonlyMap<K, V>, key: K, description: string): V {
@@ -1078,6 +1392,13 @@ function nonNegativeInteger(value: number, field: string): number {
   return value
 }
 
+function boundedInteger(value: unknown, minimum: number, maximum: number, field: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new MemoryError('INVALID_INPUT', `${field} must be an integer from ${minimum} through ${maximum}`)
+  }
+  return value as number
+}
+
 function bounded(value: number, minimum: number, maximum: number, field: string): number {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
     throw new MemoryError('INVALID_INPUT', `${field} must be from ${minimum} through ${maximum}`)
@@ -1091,6 +1412,10 @@ function assertIso(value: string, field: string): void {
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw signal.reason ?? new Error('memory operation aborted')
+}
+
+function hasNonZeroVector(vector: readonly number[]): boolean {
+  return vector.some(value => value !== 0)
 }
 
 // Service packages default-export their service class and no function-plugin namespace.

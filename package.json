@@ -43,6 +43,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsdown",
+    "eval:embedding": "pnpm run build && node evaluation/run-embedding.mjs --dataset evaluation/embedding/v1/cases.json --baseline evaluation/embedding/v1/baseline.hash-v1.json --gates evaluation/embedding/v1/gates.json --repeat 2",
+    "eval:embedding:live": "pnpm run build && node evaluation/run-embedding.mjs --dataset evaluation/embedding/v1/cases.json --baseline evaluation/embedding/v1/baseline.hash-v1.json --gates evaluation/embedding/v1/gates.json --repeat 1 --live-model qwen3.7-text-embedding --allow-network --space-id dashscope/qwen3.7-text-embedding/1024/l2 --dimensions 1024 --batch-size 16",
     "eval:golden": "pnpm run build && node evaluation/run-golden.mjs --dataset evaluation/golden/v1/retrieval.json --gates evaluation/golden/v1/gates.json --repeat 2",
     "eval:lifecycle": "pnpm run build && node evaluation/run-lifecycle.mjs --dataset evaluation/lifecycle/v1/cases.json --gates evaluation/lifecycle/v1/gates.conformance.json --repeat 2",
     "typecheck": "tsc -p tsconfig.json --noEmit",

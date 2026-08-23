@@ -25,7 +25,7 @@ One storage-domain row contains an owner revision, records, and durable write re
 
 ### Raw-first enrichment and evolution
 
-Every add first commits a recallable L1 raw record and an `accepted` job. Direct mode then creates one L2 fact or L4 identity. Extraction mode sends untrusted conversation JSON to the configured model, accepts only an exact schema-valid JSON object, pre-filters same-owner reconciliation candidates, and requires a plan that covers every extracted source exactly once.
+Every add first commits a recallable L1 raw record and an `accepted` job. Direct mode then creates one L2 fact or L4 identity. Extraction mode sends untrusted conversation JSON to the configured model, accepts only an exact schema-valid JSON object, pre-filters same-owner reconciliation candidates, and requires a plan that covers every extracted source exactly once. In a trained remote embedding space, the first raw commit carries a same-space, same-dimension zero placeholder so no fallible network call can precede durable evidence. A successful commit replaces placeholders with validated, L2-normalized vectors; embedding failure degrades the job without derived records and leaves L1 lexically recallable.
 
 `ADD` creates a new chain head. `NOOP` attaches the new raw record as additional evidence to the existing record. `CONSOLIDATE` creates a combined head and supersedes its targets. `SUPERSEDE` creates a new revision and preserves reverse links. Successful processing changes raw evidence to `source_only`; model or parsing failure marks the job `degraded` and leaves raw L1 recallable. A restart changes interrupted `accepted` jobs to `degraded` without guessing that enrichment completed.
 
@@ -33,7 +33,11 @@ The reference provider writes L0 basic profile, L1 raw, L2 fact, L3 summary, and
 
 ### Retrieval and model visibility
 
-Reads pre-filter owner, status, visibility, validity, requested layers, and optional Session before ranking. Profile and normal channels have independent quotas. The portable provider combines a versioned 256-dimensional token/character hash vector, BM25, and reciprocal-rank fusion; diagnostics identify the hash vector as degraded semantic retrieval and report the missing independent tag channel.
+Reads pre-filter owner, status, visibility, validity, requested layers, and optional Session before any provider call or ranking. Profile and normal channels have independent quotas. `EmbeddingProvider` exposes a non-secret immutable descriptor and batch embedding operation. The core performs sequential bounded batching, count/dimension/finite/non-zero validation, order preservation, and final L2 normalization. The default `HashEmbeddingProvider` preserves the versioned 256-dimensional token/character hash vectors byte-for-byte. The trained reference adapter calls an OpenAI-compatible endpoint with bounded per-attempt timeout, retry, and backoff; credentials come from a named environment variable in loader configuration and never enter descriptors or public configuration.
+
+Semantic vectors, BM25, and reciprocal-rank fusion remain independent channels. A trained-provider search outage closes only the semantic channel, returns lexical results with `semantic:provider-unavailable`, and never converts caller cancellation into fallback success. Reconciliation candidate search uses the same rule; failure while embedding final derived records still degrades the whole enrichment under raw-first semantics. Portable hash searches continue to report `semantic:portable-hash`.
+
+An owner state is valid only when every record matches the active descriptor's `spaceId` and dimensions. Import, cold startup, and mixed batches reject mismatches atomically. Provider, model, dimensions, normalization, or algorithm changes require a new deployment-fixed space ID. MEM-101 deliberately does not rewrite canonical records; re-embedding and migration belong to MEM-104.
 
 Automatic recall runs after the normal `agent/pre-step` decision and prepends one plugin-authored user message only when that decision contains direct human input and retrieval returns records. The message is bounded, delimited, labels records as fallible, and enters the ordinary Session surface before the model request. Automatic capture runs at `agent/turn-stopping`, excludes tools and the plugin's own recall message, and uses `{sessionId}:turn:{turn}` as its idempotency key.
 
@@ -41,7 +45,9 @@ The tool consumer never accepts scope identifiers from the model. It exposes dir
 
 ## Verification
 
-Package tests use the real LLM runtime, storage hub, storage-domain form, and JSON backend. They cover direct raw-first idempotency, cross-session versus Session-only retrieval, degraded extraction, strict successful extraction plus duplicate evidence, evidence-aware forgetting, and the four tool contracts. A real Loader composition writes through the JSON backend, fully disposes, starts a cold composition, and recalls the prior Session's record.
+Package tests use the real LLM runtime, storage hub, storage-domain form, and JSON backend. They cover direct raw-first idempotency, cross-session versus Session-only retrieval, degraded extraction, strict successful extraction plus duplicate evidence, evidence-aware forgetting, provider batching/normalization/retry/cancellation/redaction, trained-provider degradation and space isolation, and the four tool contracts. A real Loader composition writes through the JSON backend, fully disposes, starts a cold composition, and recalls the prior Session's record.
+
+The offline embedding evaluator uses the built package, temporary JSON storage, and public `import()`/`search()` APIs over a frozen bilingual low-overlap corpus. It performs no network access and fixes the hash baseline. Live evaluation requires both a model flag and explicit network authorization, reads endpoint/key from the environment, and emits only non-secret provider facts, aggregate/case metrics, and isolation hard checks.
 
 The package builds the service, tool, and invariant as independent exports. The invariant validates stored memory-domain changes for deleted visibility, unique active chain heads, and bidirectional evolution relations.
 
@@ -51,7 +57,7 @@ The package builds the service, tool, and invariant as independent exports. The 
 
 **Make memory tools own the store.** Automatic capture, host consumers, migration, and future UI consumers need a stable non-model capability. The tools remain a narrow optional consumer.
 
-**Require a concrete embedding service.** Harness has no embedding capability today, and binding this package to an LLM vendor would violate the provider seam. The portable hash space ships with explicit diagnostics and import compatibility checks.
+**Require one concrete embedding service.** Harness has no shared embedding capability today, and binding the package to one vendor would violate the provider seam. The package instead owns a narrow provider port, keeps the portable hash implementation as its offline default, and supplies one OpenAI-compatible production adapter.
 
 **Hide raw records after accepting a write.** A model or process failure between acceptance and enrichment would lose recallability. Raw evidence remains recallable until a successful direct or extracted commit.
 
@@ -59,4 +65,4 @@ The package builds the service, tool, and invariant as independent exports. The 
 
 Harness gains auditable cross-session memory without a second lifecycle, model adapter, or backend abstraction. Deployments can mount automatic recall/capture, explicit tools, both, or only the trusted service API. Model failures preserve evidence and return a visible degraded receipt; changing facts remain inspectable through evolution links rather than destructive overwrite.
 
-The reference store favors correctness and portability over scale: owner state is a whole JSON row, semantic vectors are approximate, and concurrency serialization is process-local. A paged transactional provider, trained embeddings, native structured output, authenticated subject mapping, retention policy, and L5-L7 semantics remain separate future decisions.
+The reference store favors correctness and portability over scale: owner state is a whole JSON row and concurrency serialization is process-local. A trained provider can improve low-overlap semantic recall, but sends memory text to an external data processor and introduces latency and availability risk; raw-first and lexical fallback bound those failures. A paged transactional store, embedding-space migration, native structured output, authenticated subject mapping, retention policy, and L5-L7 semantics remain separate future decisions.

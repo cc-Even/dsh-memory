@@ -1,0 +1,772 @@
+{
+  "buckets": [
+    {
+      "bucket": "synonym",
+      "language": "zh",
+      "mrrAt10": 0.139286,
+      "queryCount": 10,
+      "recallAt10": 0.3,
+      "recallAt5": 0.2
+    },
+    {
+      "bucket": "synonym",
+      "language": "en",
+      "mrrAt10": 0.290952,
+      "queryCount": 10,
+      "recallAt10": 0.7,
+      "recallAt5": 0.4
+    },
+    {
+      "bucket": "exact",
+      "language": "zh",
+      "mrrAt10": 1,
+      "queryCount": 3,
+      "recallAt10": 1,
+      "recallAt5": 1
+    },
+    {
+      "bucket": "exact",
+      "language": "en",
+      "mrrAt10": 1,
+      "queryCount": 3,
+      "recallAt10": 1,
+      "recallAt5": 1
+    }
+  ],
+  "cases": [
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [
+        "emb-forbidden-deleted"
+      ],
+      "id": "emb-q-synonym-zh-01",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-zh-cinema"
+      ],
+      "returnedIds": [
+        "emb-zh-cinema",
+        "emb-en-flights",
+        "emb-zh-agenda",
+        "emb-en-bicycle",
+        "emb-en-book-donation",
+        "emb-en-photo-backup",
+        "emb-zh-dairy",
+        "emb-noise-zh-weekend",
+        "emb-en-dog-command",
+        "emb-zh-hotel"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-02",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-hotel"
+      ],
+      "returnedIds": [
+        "emb-exact-en-locker",
+        "emb-en-photo-backup",
+        "emb-zh-dairy",
+        "emb-exact-zh-passphrase",
+        "emb-en-book-donation",
+        "emb-en-flights",
+        "emb-exact-en-dentist",
+        "emb-en-bicycle",
+        "emb-exact-en-checksum",
+        "emb-en-dog-command"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-03",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-running"
+      ],
+      "returnedIds": [
+        "emb-en-oatmeal",
+        "emb-exact-zh-port",
+        "emb-zh-standing",
+        "emb-en-eink",
+        "emb-zh-agenda",
+        "emb-exact-zh-passport",
+        "emb-exact-en-locker",
+        "emb-en-book-donation",
+        "emb-en-flights",
+        "emb-en-photo-backup"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-04",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-dairy"
+      ],
+      "returnedIds": [
+        "emb-en-eink",
+        "emb-en-oatmeal",
+        "emb-zh-running",
+        "emb-noise-zh-river",
+        "emb-zh-standing",
+        "emb-zh-cat-medicine",
+        "emb-en-code-review",
+        "emb-en-bicycle",
+        "emb-noise-en-apartment",
+        "emb-noise-en-backup"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-05",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-agenda"
+      ],
+      "returnedIds": [
+        "emb-zh-hotel",
+        "emb-zh-cinema",
+        "emb-noise-zh-weekend",
+        "emb-zh-running",
+        "emb-en-code-review"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-06",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-detergent"
+      ],
+      "returnedIds": [
+        "emb-zh-cat-medicine",
+        "emb-en-book-donation",
+        "emb-en-eink",
+        "emb-en-thermostat",
+        "emb-noise-zh-weekend",
+        "emb-en-oatmeal",
+        "emb-exact-zh-passport",
+        "emb-en-photo-backup",
+        "emb-exact-en-dentist",
+        "emb-noise-en-weekend"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 7,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-07",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 0,
+      "reciprocalRank": 0.142857,
+      "relevantIds": [
+        "emb-zh-harbin"
+      ],
+      "returnedIds": [
+        "emb-zh-dairy",
+        "emb-noise-en-apartment",
+        "emb-noise-en-backup",
+        "emb-en-code-review",
+        "emb-en-thermostat",
+        "emb-zh-running",
+        "emb-zh-harbin",
+        "emb-zh-standing",
+        "emb-zh-cat-medicine",
+        "emb-exact-en-dentist"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-08",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-standing"
+      ],
+      "returnedIds": [
+        "emb-en-bicycle",
+        "emb-exact-en-locker",
+        "emb-en-flights",
+        "emb-en-oatmeal",
+        "emb-en-thermostat",
+        "emb-noise-zh-weekend",
+        "emb-zh-cat-medicine",
+        "emb-zh-emergency-contact",
+        "emb-noise-en-backup",
+        "emb-zh-agenda"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-09",
+      "language": "zh",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-zh-cat-medicine"
+      ],
+      "returnedIds": [
+        "emb-en-thermostat",
+        "emb-exact-en-dentist",
+        "emb-exact-en-checksum",
+        "emb-zh-harbin",
+        "emb-zh-emergency-contact",
+        "emb-exact-zh-passphrase",
+        "emb-zh-detergent",
+        "emb-noise-en-apartment",
+        "emb-noise-en-weekend",
+        "emb-en-flights"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 4,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-zh-10",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 0.25,
+      "relevantIds": [
+        "emb-zh-emergency-contact"
+      ],
+      "returnedIds": [
+        "emb-zh-cinema",
+        "emb-zh-cat-medicine",
+        "emb-noise-zh-weekend",
+        "emb-zh-emergency-contact",
+        "emb-en-book-donation",
+        "emb-en-thermostat",
+        "emb-exact-en-locker"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 2,
+      "forbiddenHits": [],
+      "forbiddenIds": [
+        "emb-forbidden-cross-owner"
+      ],
+      "id": "emb-q-synonym-en-01",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 0.5,
+      "relevantIds": [
+        "emb-en-bicycle"
+      ],
+      "returnedIds": [
+        "emb-en-code-review",
+        "emb-en-bicycle",
+        "emb-en-oatmeal",
+        "emb-en-emergency-fund",
+        "emb-en-dog-command",
+        "emb-exact-en-checksum",
+        "emb-en-photo-backup",
+        "emb-exact-en-locker",
+        "emb-en-book-donation",
+        "emb-en-thermostat"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [
+        "emb-forbidden-source-only"
+      ],
+      "id": "emb-q-synonym-en-02",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-en-oatmeal"
+      ],
+      "returnedIds": [
+        "emb-en-oatmeal",
+        "emb-en-thermostat",
+        "emb-en-bicycle",
+        "emb-zh-emergency-contact",
+        "emb-noise-en-weekend",
+        "emb-en-dog-command",
+        "emb-en-eink",
+        "emb-en-code-review",
+        "emb-noise-en-backup",
+        "emb-exact-en-checksum"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 2,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-03",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 0.5,
+      "relevantIds": [
+        "emb-en-thermostat"
+      ],
+      "returnedIds": [
+        "emb-en-code-review",
+        "emb-en-thermostat",
+        "emb-exact-en-locker",
+        "emb-exact-en-checksum",
+        "emb-en-eink",
+        "emb-exact-en-dentist",
+        "emb-en-emergency-fund",
+        "emb-en-oatmeal",
+        "emb-noise-en-apartment",
+        "emb-noise-en-weekend"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-04",
+      "language": "en",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-en-flights"
+      ],
+      "returnedIds": [
+        "emb-noise-en-apartment",
+        "emb-en-eink",
+        "emb-en-book-donation",
+        "emb-en-emergency-fund",
+        "emb-noise-en-backup",
+        "emb-en-photo-backup",
+        "emb-en-thermostat",
+        "emb-en-code-review",
+        "emb-en-dog-command",
+        "emb-en-oatmeal"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 6,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-05",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 0,
+      "reciprocalRank": 0.166667,
+      "relevantIds": [
+        "emb-en-code-review"
+      ],
+      "returnedIds": [
+        "emb-en-eink",
+        "emb-noise-en-weekend",
+        "emb-en-dog-command",
+        "emb-en-emergency-fund",
+        "emb-exact-en-checksum",
+        "emb-en-code-review",
+        "emb-en-thermostat",
+        "emb-exact-en-dentist",
+        "emb-noise-en-apartment",
+        "emb-en-flights"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-06",
+      "language": "en",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-en-photo-backup"
+      ],
+      "returnedIds": [
+        "emb-en-dog-command",
+        "emb-en-bicycle",
+        "emb-noise-en-apartment",
+        "emb-exact-en-locker",
+        "emb-en-code-review",
+        "emb-en-eink",
+        "emb-noise-en-weekend",
+        "emb-en-book-donation",
+        "emb-en-emergency-fund",
+        "emb-en-oatmeal"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 2,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-07",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 0.5,
+      "relevantIds": [
+        "emb-en-dog-command"
+      ],
+      "returnedIds": [
+        "emb-en-bicycle",
+        "emb-en-dog-command",
+        "emb-noise-en-weekend",
+        "emb-en-photo-backup",
+        "emb-en-emergency-fund",
+        "emb-exact-en-checksum",
+        "emb-en-book-donation",
+        "emb-en-code-review",
+        "emb-en-oatmeal",
+        "emb-noise-en-apartment"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": null,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-08",
+      "language": "en",
+      "recallAt10": 0,
+      "recallAt5": 0,
+      "reciprocalRank": 0,
+      "relevantIds": [
+        "emb-en-book-donation"
+      ],
+      "returnedIds": [
+        "emb-en-code-review",
+        "emb-en-oatmeal",
+        "emb-en-eink",
+        "emb-en-photo-backup",
+        "emb-exact-en-locker",
+        "emb-noise-en-weekend",
+        "emb-noise-en-apartment",
+        "emb-en-dog-command",
+        "emb-en-flights",
+        "emb-en-thermostat"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 7,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-09",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 0,
+      "reciprocalRank": 0.142857,
+      "relevantIds": [
+        "emb-en-eink"
+      ],
+      "returnedIds": [
+        "emb-en-code-review",
+        "emb-en-emergency-fund",
+        "emb-en-thermostat",
+        "emb-en-oatmeal",
+        "emb-exact-en-checksum",
+        "emb-exact-en-locker",
+        "emb-en-eink",
+        "emb-noise-en-backup",
+        "emb-noise-en-apartment",
+        "emb-noise-en-weekend"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "synonym",
+      "firstRelevantRank": 10,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-synonym-en-10",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 0,
+      "reciprocalRank": 0.1,
+      "relevantIds": [
+        "emb-en-emergency-fund"
+      ],
+      "returnedIds": [
+        "emb-en-eink",
+        "emb-noise-en-weekend",
+        "emb-en-oatmeal",
+        "emb-en-code-review",
+        "emb-en-book-donation",
+        "emb-en-thermostat",
+        "emb-en-dog-command",
+        "emb-exact-en-dentist",
+        "emb-en-photo-backup",
+        "emb-en-emergency-fund"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-zh-01",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-zh-passphrase"
+      ],
+      "returnedIds": [
+        "emb-exact-zh-passphrase",
+        "emb-noise-en-apartment",
+        "emb-en-thermostat",
+        "emb-noise-zh-weekend",
+        "emb-zh-hotel",
+        "emb-en-flights",
+        "emb-en-code-review",
+        "emb-en-photo-backup"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-zh-02",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-zh-passport"
+      ],
+      "returnedIds": [
+        "emb-exact-zh-passport",
+        "emb-zh-standing",
+        "emb-en-oatmeal",
+        "emb-zh-detergent",
+        "emb-zh-dairy",
+        "emb-en-code-review",
+        "emb-zh-emergency-contact",
+        "emb-noise-en-apartment",
+        "emb-noise-en-backup",
+        "emb-en-bicycle"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-zh-03",
+      "language": "zh",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-zh-port"
+      ],
+      "returnedIds": [
+        "emb-exact-zh-port",
+        "emb-en-code-review",
+        "emb-en-emergency-fund",
+        "emb-zh-running",
+        "emb-noise-zh-river",
+        "emb-exact-en-locker",
+        "emb-en-oatmeal",
+        "emb-noise-en-apartment",
+        "emb-noise-en-backup",
+        "emb-en-thermostat"
+      ],
+      "split": "holdout"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-en-01",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-en-checksum"
+      ],
+      "returnedIds": [
+        "emb-exact-en-checksum",
+        "emb-exact-en-locker",
+        "emb-en-thermostat",
+        "emb-en-dog-command",
+        "emb-en-bicycle",
+        "emb-en-code-review",
+        "emb-noise-en-apartment",
+        "emb-noise-en-weekend",
+        "emb-en-book-donation",
+        "emb-exact-en-dentist"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-en-02",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-en-dentist"
+      ],
+      "returnedIds": [
+        "emb-exact-en-dentist",
+        "emb-en-thermostat",
+        "emb-noise-en-weekend",
+        "emb-noise-en-apartment",
+        "emb-en-bicycle",
+        "emb-exact-en-checksum",
+        "emb-en-dog-command",
+        "emb-en-book-donation",
+        "emb-en-eink",
+        "emb-en-photo-backup"
+      ],
+      "split": "baseline"
+    },
+    {
+      "bucket": "exact",
+      "firstRelevantRank": 1,
+      "forbiddenHits": [],
+      "forbiddenIds": [],
+      "id": "emb-q-exact-en-03",
+      "language": "en",
+      "recallAt10": 1,
+      "recallAt5": 1,
+      "reciprocalRank": 1,
+      "relevantIds": [
+        "emb-exact-en-locker"
+      ],
+      "returnedIds": [
+        "emb-exact-en-locker",
+        "emb-en-code-review",
+        "emb-exact-en-checksum",
+        "emb-en-dog-command",
+        "emb-en-thermostat",
+        "emb-en-bicycle",
+        "emb-en-flights",
+        "emb-en-emergency-fund",
+        "emb-en-oatmeal",
+        "emb-en-book-donation"
+      ],
+      "split": "holdout"
+    }
+  ],
+  "dataset": {
+    "id": "dsh-memory-embedding",
+    "referenceCommit": "cf9234c4038289f966deef1303edb8a03635da97",
+    "version": "1.0.0"
+  },
+  "hardChecks": {
+    "duplicateResultIds": 0,
+    "forbiddenHits": 0,
+    "scopeLeaks": 0
+  },
+  "metrics": {
+    "exact": {
+      "mrrAt10": 1,
+      "recallAt10": 1,
+      "recallAt5": 1
+    },
+    "synonym": {
+      "mrrAt10": 0.215119,
+      "recallAt10": 0.5,
+      "recallAt5": 0.3
+    }
+  },
+  "provider": {
+    "dimensions": 256,
+    "model": null,
+    "normalization": "l2",
+    "quality": "portable-hash",
+    "spaceId": "dsh-memory/hash-token-char-v1/256/l2"
+  },
+  "runner": {
+    "externalNetwork": false,
+    "mode": "offline-hash",
+    "repeats": 2,
+    "version": 1
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "id": "dsh-memory-embedding",
+    "version": "1.0.0",
+    "referenceCommit": "cf9234c4038289f966deef1303edb8a03635da97"
+  },
+  "offline": {
+    "metrics": {
+      "synonym": {
+        "recallAt5": 0.3,
+        "recallAt10": 0.5,
+        "mrrAt10": 0.215119
+      },
+      "exact": {
+        "recallAt5": 1,
+        "recallAt10": 1,
+        "mrrAt10": 1
+      }
+    }
+  },
+  "live": {
+    "relativeSynonymRecallAt10Floor": 0.2,
+    "exactRecallAt10Floor": 1
+  },
+  "hardChecks": {
+    "scopeLeaks": 0,
+    "forbiddenHits": 0,
+    "duplicateResultIds": 0
+  }
+}
