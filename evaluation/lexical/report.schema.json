@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dsh-memory/evaluation/lexical/report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "dataset", "runner", "embeddingSpace", "modes", "delta"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "dataset": { "$ref": "#/$defs/dataset" },
+    "runner": { "$ref": "#/$defs/runner" },
+    "embeddingSpace": { "$ref": "#/$defs/embeddingSpace" },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy", "cjkBigram"],
+      "properties": {
+        "legacy": { "$ref": "#/$defs/legacyMode" },
+        "cjkBigram": { "$ref": "#/$defs/cjkBigramMode" }
+      }
+    },
+    "delta": { "$ref": "#/$defs/deltaTriple" }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "referenceCommit"],
+      "properties": {
+        "id": { "const": "dsh-memory-lexical" },
+        "version": { "const": "1.0.0" },
+        "referenceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "runner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "repeats", "externalNetwork"],
+      "properties": {
+        "version": { "const": 1 },
+        "repeats": { "type": "integer", "minimum": 1 },
+        "externalNetwork": { "const": false }
+      }
+    },
+    "embeddingSpace": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "dimensions"],
+      "properties": {
+        "id": { "const": "dsh-memory/hash-token-char-v1/256/l2" },
+        "dimensions": { "const": 256 }
+      }
+    },
+    "modeMetricTriple": {
+      "type": "object", "additionalProperties": false,
+      "required": ["recallAt5", "recallAt10", "mrrAt10"],
+      "properties": {
+        "recallAt5": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recallAt10": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mrrAt10": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "deltaTriple": {
+      "type": "object", "additionalProperties": false,
+      "required": ["recallAt5", "recallAt10", "mrrAt10"],
+      "properties": {
+        "recallAt5": { "type": "number", "minimum": -1, "maximum": 1 },
+        "recallAt10": { "type": "number", "minimum": -1, "maximum": 1 },
+        "mrrAt10": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "bucketBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bucket", "queryCount", "recallAt5", "recallAt10", "mrrAt10"],
+      "properties": {
+        "bucket": { "enum": ["continuous_cjk", "mixed_language", "punctuation_boundary", "short_term"] },
+        "queryCount": { "const": 6 },
+        "recallAt5": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recallAt10": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mrrAt10": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "continuousBucket": { "$ref": "#/$defs/bucketBase", "properties": { "bucket": { "const": "continuous_cjk" } } },
+    "mixedBucket": { "$ref": "#/$defs/bucketBase", "properties": { "bucket": { "const": "mixed_language" } } },
+    "punctuationBucket": { "$ref": "#/$defs/bucketBase", "properties": { "bucket": { "const": "punctuation_boundary" } } },
+    "shortBucket": { "$ref": "#/$defs/bucketBase", "properties": { "bucket": { "const": "short_term" } } },
+    "buckets": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "prefixItems": [
+        { "$ref": "#/$defs/continuousBucket" },
+        { "$ref": "#/$defs/mixedBucket" },
+        { "$ref": "#/$defs/punctuationBucket" },
+        { "$ref": "#/$defs/shortBucket" }
+      ],
+      "items": false
+    },
+    "scoredCase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "bucket", "split", "relevantIds", "forbiddenIds", "returnedIds", "firstRelevantRank", "recallAt5", "recallAt10", "reciprocalRank", "forbiddenHits"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "bucket": { "enum": ["continuous_cjk", "mixed_language", "punctuation_boundary", "short_term"] },
+        "split": { "enum": ["baseline", "holdout"] },
+        "relevantIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "forbiddenIds": { "type": "array", "maxItems": 0 },
+        "returnedIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "firstRelevantRank": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+        "recallAt5": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recallAt10": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reciprocalRank": { "type": "number", "minimum": 0, "maximum": 1 },
+        "forbiddenHits": { "type": "array", "maxItems": 0 }
+      }
+    },
+    "filterCase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "bucket", "split", "relevantIds", "forbiddenIds", "returnedIds", "firstRelevantRank", "recallAt5", "recallAt10", "reciprocalRank", "forbiddenHits"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "bucket": { "const": "filter" },
+        "split": { "const": "filter" },
+        "relevantIds": { "type": "array", "maxItems": 0 },
+        "forbiddenIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "returnedIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "firstRelevantRank": { "type": "null" },
+        "recallAt5": { "type": "null" },
+        "recallAt10": { "type": "null" },
+        "reciprocalRank": { "type": "null" },
+        "forbiddenHits": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "cases": {
+      "type": "array", "minItems": 30, "maxItems": 30,
+      "items": { "oneOf": [{ "$ref": "#/$defs/scoredCase" }, { "$ref": "#/$defs/filterCase" }] },
+      "allOf": [
+        { "contains": { "$ref": "#/$defs/scoredCase" }, "minContains": 24, "maxContains": 24 },
+        { "contains": { "$ref": "#/$defs/filterCase" }, "minContains": 6, "maxContains": 6 }
+      ]
+    },
+    "hardChecks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scopeLeaks", "forbiddenHits", "duplicateResultIds"],
+      "properties": {
+        "scopeLeaks": { "type": "integer", "minimum": 0 },
+        "forbiddenHits": { "type": "integer", "minimum": 0 },
+        "duplicateResultIds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "legacyMode": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tokenizer", "metrics", "buckets", "cases", "hardChecks"],
+      "properties": {
+        "tokenizer": {
+          "type": "object", "additionalProperties": false, "required": ["kind", "implementation"],
+          "properties": { "kind": { "const": "legacy" }, "implementation": { "type": "string", "minLength": 1 } }
+        },
+        "metrics": { "$ref": "#/$defs/modeMetricTriple" },
+        "buckets": { "$ref": "#/$defs/buckets" },
+        "cases": { "$ref": "#/$defs/cases" },
+        "hardChecks": { "$ref": "#/$defs/hardChecks" }
+      }
+    },
+    "cjkBigramMode": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tokenizer", "metrics", "buckets", "cases", "hardChecks"],
+      "properties": {
+        "tokenizer": {
+          "type": "object", "additionalProperties": false, "required": ["kind", "implementation"],
+          "properties": { "kind": { "const": "cjk-bigram" }, "implementation": { "type": "string", "minLength": 1 } }
+        },
+        "metrics": { "$ref": "#/$defs/modeMetricTriple" },
+        "buckets": { "$ref": "#/$defs/buckets" },
+        "cases": { "$ref": "#/$defs/cases" },
+        "hardChecks": { "$ref": "#/$defs/hardChecks" }
+      }
+    }
+  }
+}

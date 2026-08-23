@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dsh-memory/evaluation/lexical/v1/dataset.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasetId", "datasetVersion", "referenceCommit", "evaluationTime", "groups", "filterRecords", "filterQueries"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetId": { "const": "dsh-memory-lexical" },
+    "datasetVersion": { "const": "1.0.0" },
+    "referenceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "evaluationTime": { "const": "2026-08-23T00:00:00.000Z" },
+    "groups": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/$defs/group" } },
+    "filterRecords": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/$defs/filterRecord" } },
+    "filterQueries": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/$defs/filterQuery" } }
+  },
+  "$defs": {
+    "owner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tenantId", "userId", "agentId"],
+      "properties": { "tenantId": { "type": "string", "minLength": 1 }, "userId": { "type": "string", "minLength": 1 }, "agentId": { "type": "string", "minLength": 1 } }
+    },
+    "record": {
+      "type": "object", "additionalProperties": false, "required": ["id", "content"],
+      "properties": { "id": { "type": "string", "pattern": "^r[0-9a-f]{12}$" }, "content": { "type": "string", "minLength": 1 } }
+    },
+    "query": {
+      "type": "object", "additionalProperties": false, "required": ["id", "bucket", "split", "query", "relevantIds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^q[0-9]{4}$" },
+        "bucket": { "enum": ["continuous_cjk", "mixed_language", "punctuation_boundary", "short_term"] },
+        "split": { "enum": ["baseline", "holdout"] },
+        "query": { "type": "string", "minLength": 1 },
+        "relevantIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^r[0-9a-f]{12}$" } }
+      }
+    },
+    "codes": { "type": "array", "minItems": 12, "maxItems": 12, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9]{5}$" } },
+    "ids": { "type": "array", "minItems": 12, "maxItems": 12, "uniqueItems": true, "items": { "type": "string", "pattern": "^r[0-9a-f]{12}$" } },
+    "group": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "owner", "sourceSessionId", "records", "sharedInterference", "distractorCodes", "distractorIds", "queries"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^g[0-9]{2}$" }, "owner": { "$ref": "#/$defs/owner" }, "sourceSessionId": { "type": "string", "minLength": 1 },
+        "records": { "type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": { "$ref": "#/$defs/record" } },
+        "sharedInterference": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/record" } },
+        "distractorCodes": {
+          "type": "object", "additionalProperties": false, "required": ["continuous_cjk", "punctuation_boundary", "short_term"],
+          "properties": { "continuous_cjk": { "$ref": "#/$defs/codes" }, "punctuation_boundary": { "$ref": "#/$defs/codes" }, "short_term": { "$ref": "#/$defs/codes" } }
+        },
+        "distractorIds": {
+          "type": "object", "additionalProperties": false, "required": ["continuous_cjk", "punctuation_boundary", "short_term"],
+          "properties": { "continuous_cjk": { "$ref": "#/$defs/ids" }, "punctuation_boundary": { "$ref": "#/$defs/ids" }, "short_term": { "$ref": "#/$defs/ids" } }
+        },
+        "queries": { "type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": { "$ref": "#/$defs/query" } }
+      }
+    },
+    "filterRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "owner", "sourceSessionId", "content", "status", "visibility"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^r[0-9a-f]{12}$" }, "owner": { "$ref": "#/$defs/owner" }, "sourceSessionId": { "type": "string", "minLength": 1 }, "content": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["active", "deleted"] }, "visibility": { "enum": ["recallable", "source_only"] }, "validUntil": { "type": "string", "format": "date-time" }
+      }
+    },
+    "filterQuery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "owner", "sessionId", "sessionOnly", "query", "forbiddenIds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^q[0-9]{4}$" }, "owner": { "$ref": "#/$defs/owner" }, "sessionId": { "type": "string", "minLength": 1 }, "sessionOnly": { "type": "boolean" }, "query": { "type": "string", "minLength": 1 },
+        "forbiddenIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^r[0-9a-f]{12}$" } }
+      }
+    }
+  }
+}

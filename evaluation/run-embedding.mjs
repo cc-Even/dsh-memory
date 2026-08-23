@@ -118,6 +118,7 @@ async function openContext(provider) {
       userId: 'embedding-evaluation-user',
       autoCapture: false,
       autoRecall: false,
+      tokenizer: { kind: 'legacy' },
       ...(provider === undefined ? {} : { embeddingProvider: provider }),
     })
     return { ctx, root }

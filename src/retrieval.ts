@@ -19,12 +19,43 @@ const CONCEPTUAL_TERMS = [
   '怎么', '为什么', '如何', '倾向', '风格', '整体', '通常', '模式',
 ]
 
-/**
- * Split mixed Chinese/Latin text into normalized retrieval tokens.
- * @param text - Source or query text.
- * @returns normalized retrieval tokens in source order.
- */
+/** Pluggable lexical tokenization used by the BM25 channel. */
+export interface LexicalTokenizer {
+  tokenize(text: string): readonly string[]
+}
+
+/** Default deterministic tokenizer for Basic Han and ASCII runs. */
+export class CjkBigramTokenizer implements LexicalTokenizer {
+  tokenize(text: string): string[] {
+    const tokens: string[] = []
+    for (const match of text.matchAll(TOKEN_PATTERN)) {
+      const run = match[0]
+      if (/^[A-Za-z0-9]+$/u.test(run)) {
+        tokens.push(run.toLowerCase())
+        continue
+      }
+      const points = Array.from(run)
+      if (points.length === 1) {
+        tokens.push(points[0] as string)
+        continue
+      }
+      for (let index = 0; index + 1 < points.length; index += 1) {
+        tokens.push(`${points[index]}${points[index + 1]}`)
+      }
+    }
+    return tokens
+  }
+}
+
+const DEFAULT_LEXICAL_TOKENIZER = new CjkBigramTokenizer()
+
+/** Split mixed Chinese/Latin text with the default CJK-bigram policy. */
 export function tokenize(text: string): string[] {
+  return DEFAULT_LEXICAL_TOKENIZER.tokenize(text)
+}
+
+/** Preserve the pre-MEM-102 token stream exclusively for the versioned hash space. */
+function legacyHashTokens(text: string): string[] {
   return Array.from(text.matchAll(TOKEN_PATTERN), match => match[0].toLowerCase())
 }
 
@@ -47,7 +78,7 @@ export function classifyIntent(query: string): 'navigational' | 'factual' | 'con
 export function hashEmbedding(text: string): number[] {
   const vector = Array<number>(HASH_EMBEDDING_DIMENSIONS).fill(0)
   const features: string[] = []
-  for (const token of tokenize(text)) {
+  for (const token of legacyHashTokens(text)) {
     features.push(`t:${token}`)
     const points = Array.from(token)
     for (let index = 0; index + 1 < points.length; index += 1) {
@@ -97,9 +128,15 @@ export function cosine(left: readonly number[], right: readonly number[]): numbe
  * @param b - Document-length normalization.
  * @returns one score per candidate document.
  */
-export function bm25(query: readonly string[], documents: readonly string[], k1: number, b: number): number[] {
+export function bm25(
+  query: readonly string[],
+  documents: readonly string[],
+  k1: number,
+  b: number,
+  tokenizer: LexicalTokenizer = DEFAULT_LEXICAL_TOKENIZER,
+): number[] {
   if (query.length === 0 || documents.length === 0) return documents.map(() => 0)
-  const tokenized = documents.map(tokenize)
+  const tokenized = documents.map(document => tokenizer.tokenize(document))
   const lengths = tokenized.map(tokens => tokens.length)
   const averageLength = lengths.reduce((sum, length) => sum + length, 0) / documents.length || 1
   const terms = [...new Set(query.filter(Boolean))]

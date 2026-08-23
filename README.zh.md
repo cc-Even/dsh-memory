@@ -17,7 +17,7 @@
 - **原始证据优先持久化**——在可能失败的模型抽取开始前，先提交来源内容。
 - **结构化记忆分层**——支持基础画像、原始证据、事实、摘要和稳定身份信息。
 - **非破坏式演进**——重复、合并或被取代的事实都会保留来源与版本关系。
-- **可替换的混合检索**——将便携哈希空间或训练型 Embedding Provider 与 BM25、倒数排名融合组合。
+- **可替换的混合检索**——将便携哈希空间或训练型 Embedding Provider 与可配置的中文感知 BM25、倒数排名融合组合。
 - **自动捕获与召回**——接入 Harness Turn 事件，同时保留原有 Session 日志。
 - **显式模型工具**——提供新增、搜索、列出和遗忘操作，作用域由服务端派生。
 - **优雅降级**——抽取失败时，原始 L1 记录仍然持久且可召回。
@@ -110,6 +110,7 @@ Git 安装会运行包的 `prepare` 脚本。如果 `dsh` 提示 pnpm 构建授�
 | `autoCapture` | `boolean` | `true` | 直接用户 Turn 停止时抽取持久记忆。 |
 | `autoRecall` | `boolean` | `true` | 包含直接用户输入的 Step 开始前召回记忆。 |
 | `embedding` | 对象 | `{ kind: "hash" }` | 便携哈希或 OpenAI 兼容 Embedding 配置。 |
+| `tokenizer` | 对象 | `{ kind: "cjk-bigram" }` | CJK bigram 或 legacy BM25 分词策略。 |
 
 bundle patch 会从当前默认模型选择中提供 `provider` 与 `model`；直接挂载服务时，这两个字段仍为必填项。
 
@@ -139,12 +140,20 @@ bundle patch 会从当前默认模型选择中提供 `provider` 与 `model`；�
 
 核心按 provider 声明的上限顺序分批，保持输入输出顺序，校验数量、维度、有限非零数值，并执行最终 L2 归一化。参考远端适配器只在网络故障、HTTP 408/429/5xx 和单次超时时按配置上限重试；调用方取消会保持原始原因向上传递。
 
+### 词法分词
+
+默认 `CjkBigramTokenizer` 会把每段 ASCII 字母数字转为小写 token，并把每段连续 Basic Han 字符（`U+3400`–`U+9FFF`）拆成重叠 bigram；单个汉字保留为单字符 token。标点、空白、下划线、emoji、全角拉丁字符和 supplementary Han 都是分隔符。实现刻意不做 Unicode 归一化、词干提取、停用词、词典或同义词扩展。
+
+配置 `tokenizer: { kind: "legacy" }` 可把 BM25 回滚到 MEM-102 之前的整段中文 token 行为。该回滚不会改写任何持久向量、embedding space、canonical 记录或演进关系。带版本的便携哈希实现始终走私有 legacy token 路径，因此两种词法模式都不会改变 `dsh-memory/hash-token-char-v1/256/l2` 的任何向量元素。
+
+受信任的程序化消费者也可以注入实现 `LexicalTokenizer` 的 `lexicalTokenizer`；它与 Loader 的 `tokenizer` 配置互斥。构造时会用空字符串做脱敏 preflight。运行时输出必须是实际数组，最多包含 100,000 个非空字符串，每个 token 最多 256 个 UTF-16 code unit，并会立即复制。故障只暴露 `TOKENIZATION_FAILED` / `lexical tokenizer failed`。自定义 tokenizer 在进程内同步执行；若实现进入无限循环，调用边界无法抢占，因此宿主必须只注入可信且资源有界的实现。
+
 ### 限制与检索策略
 
 | 选项 | 默认值 | 说明 |
 | --- | ---: | --- |
 | `maxModelTokens` | `4096` | 每次抽取或调和调用的最大输出 token 数。 |
-| `maxInputChars` | `50000` | 单次写入可接受的最大来源字符数。 |
+| `maxInputChars` | `50000` | 单次写入的最大来源字符数，或单次搜索的最大 query 字符数。 |
 | `maxRecordChars` | `4000` | 单条派生记录保留的最大字符数。 |
 | `recallLimit` | `8` | 普通召回通道的最大结果数。 |
 | `profileLimit` | `4` | 单独预留的画像结果数。 |
@@ -227,7 +236,7 @@ const result = await ctx.memory.search({
 
 启用自动捕获后，已完成用户 Turn 中的非工具对话会作为不可信 JSON 数据发送给配置的记忆模型。抽取不会改变已经在生成中的回答。每个 Turn 会增加一次抽取调用；发现事实时，还会再增加一次调和调用。
 
-使用远端 embedding 空间时，新增操作仍会在任何网络 I/O 前提交可召回的 L1 原始记录与 `accepted` 作业。首次提交使用同空间、同维度的零向量占位；增强成功后替换为已校验向量。Provider 失败会把作业标为 `degraded`、不创建派生记录，并保留可通过词法通道召回的原文。搜索只在按 owner、状态、可见性、有效期、层级和 Session 完成过滤后调用 provider；非取消故障只关闭语义通道，并报告 `semantic:provider-unavailable`。
+使用远端 embedding 空间时，新增操作仍会在任何网络 I/O 前提交可召回的 L1 原始记录与 `accepted` 作业。首次提交使用同空间、同维度的零向量占位；增强成功后替换为已校验向量。Provider 失败会把作业标为 `degraded`、不创建派生记录，并保留可通过词法通道召回的原文。搜索只有在按 owner、状态、可见性、有效期、层级和 Session 完成过滤后才调用 provider 与 tokenizer；候选为空时两者都不会调用。非取消类 provider 故障只关闭语义排序并报告 `semantic:provider-unavailable`；tokenizer 故障只关闭 BM25 并报告 `lexical:tokenizer-unavailable`；两者均不可用时返回空通道和两项诊断。调和候选可以只依赖词法通道；仅依赖语义通道时，query 向量与至少一条候选向量必须均为非零，否则会用固定脱敏 tokenizer 错误降级 accepted job，并保留可召回 L1。调用方取消绝不会被转换为降级成功。
 
 记忆内容会被发送到所配置的 embedding 端点。部署者应根据内容敏感程度选择端点及保留策略。密钥只从命名环境变量读取，不会进入 descriptor、错误、日志或评测报告。
 
@@ -238,6 +247,7 @@ const result = await ctx.memory.search({
 - 内建哈希嵌入可移植且确定，但弱于经过训练的多语言嵌入模型。
 - 一个非空存储只能使用活动的 embedding `spaceId` 与维度。切换 provider、模型、维度或归一化方式必须使用新 `spaceId`；MEM-101 会拒绝冷切换和异空间导入，不执行重嵌入，迁移留给 MEM-104。
 - 标签会参与词法文本检索，但目前没有独立标签索引。
+- 受信任的自定义 tokenizer 是进程内同步扩展；其输出有边界，但永不返回的实现无法在调用边界被中断。
 - 每次变更都会原子替换一个所有者的整行 JSON 状态，不适合超大规模语料。
 - 按所有者串行化仅限单进程；storage domain 尚不提供跨进程 compare-and-set。
 - 抽取与调和要求模型返回严格 JSON；说明文字或错误格式会导致封闭失败。
@@ -256,6 +266,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm run eval:embedding
+pnpm run eval:lexical
 ```
 
 离线 Embedding 评测会先构建产物，再使用临时 JSON 存储以及公共 `import()`/`search()` API，全程不访问网络。Live 质量评测具有显式双重授权，并从 `DASHSCOPE_API_URL` 与 `DASHSCOPE_API_KEY` 读取端点和密钥：
@@ -265,6 +276,8 @@ pnpm run eval:embedding:live
 ```
 
 该 DashScope 脚本固定批量大小为 16、`repeat` 为 1，用于一次有界观测运行。不要在未明确授权网络访问时把 live 命令用于普通测试或 CI。报告会包含 provider、模型、空间、维度及聚合/逐例指标，但不会包含端点、密钥、请求头、响应体、向量或临时路径。
+
+词法评测也会先构建包，并在全新临时 Context 中对同一份冻结的 258 条记录语料运行两次：先用 `legacy`，再用 `cjk-bigram`。报告包含逐例排名、Recall@5/10、MRR@10、分桶指标、delta 与隔离 hard checks，且不访问网络。Embedding 评测会显式选择 `legacy`，使 MEM-101 baseline 不受新的默认词法策略影响。
 
 测试覆盖原始证据优先的幂等写入、跨会话检索、自动召回、抽取降级、记忆调和、证据感知遗忘、四个模型工具，以及 Loader 冷重启后的持久化。
 

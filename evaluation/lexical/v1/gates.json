@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "id": "dsh-memory-lexical",
+    "version": "1.0.0",
+    "referenceCommit": "2dc101db4d368866051af62d18897d6889511400"
+  },
+  "quality": {
+    "cjkRecallAt10Floor": 0.9,
+    "cjkMrrAt10Floor": 0.75,
+    "recallAt10DeltaFloor": 0.2,
+    "mrrAt10DeltaFloor": 0.15,
+    "bucketRecallAt10Floor": 0.833333,
+    "legacyRecallAt10MinimumExclusive": 0,
+    "legacyRecallAt10Maximum": 0.7,
+    "legacyMrrAt10MinimumExclusive": 0,
+    "legacyMrrAt10Maximum": 0.65
+  },
+  "hardChecks": {
+    "scopeLeaks": 0,
+    "forbiddenHits": 0,
+    "duplicateResultIds": 0
+  }
+}

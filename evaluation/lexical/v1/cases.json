@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "dsh-memory-lexical",
+  "datasetVersion": "1.0.0",
+  "referenceCommit": "2dc101db4d368866051af62d18897d6889511400",
+  "evaluationTime": "2026-08-23T00:00:00.000Z",
+  "groups": [
+    {
+      "id": "g01",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-01", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-01",
+      "records": [
+        { "id": "r7dea70aa0b5b", "content": "每周执行数据库备份演练并同步核对恢复记录与值班交接事项" },
+        { "id": "r22413640d2de", "content": "服务改造使用API完成接口校验并记录兼容性结果" },
+        { "id": "rc939d4acd354", "content": "本周会议完成年度预算与最终复核工作" },
+        { "id": "r69f5c4a127d4", "content": "电子发票夹存放在财务资料柜第二层" }
+      ],
+      "sharedInterference": [
+        { "id": "read69e4a37cd", "content": "仓库盘点记录" },
+        { "id": "r8d9ff9130f13", "content": "GraphQL网关限流" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["a1xlp", "a2np9", "a4xlm", "a17ci", "a2npn", "a4ef2", "a4efv", "a4xlp", "a3333", "a4efk", "a017l", "a017q"],
+        "punctuation_boundary": ["b27r7", "b27vz", "b4a8u", "b5sbg", "b1a8u", "b527r", "b527v", "b027p", "b027r", "b027v", "b04a8", "b07r7"],
+        "short_term": ["c07r6", "c0hu3", "c0lh9", "c0lu3", "c0qoz", "c0vzf", "c0vzi", "c127r", "c12w2", "c17r6", "c1ilh", "c1ilu"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["r946d80851b0d", "r1048805ddadc", "r8ad9304f9305", "r30488d2d02d0", "rffaefe5f27bc", "r67352f0923bc", "rd21e42e75e42", "re99c038e2724", "r0d0dfe4b0e21", "r6dd49ebe4fae", "ra47ec04e7183", "rae961f89765f"],
+        "punctuation_boundary": ["r88077c37a959", "r5920e7756249", "rcdc0b985684d", "r592279951a52", "rb5790a228c31", "rf6e127459822", "rfd9c95202861", "r03e4fc701883", "r59134cd3c2ed", "rbda8affde511", "r131edcf1f74d", "r516e21fb3d91"],
+        "short_term": ["r5ae7dadbd2cd", "ra68a01d48a4f", "rcf9975fde731", "rf3d0de67d236", "r04253a85541f", "rac6cf880693b", "r9b69596f2b13", "r2169d78da5ec", "r93b335b221a8", "r56ff1f174c47", "ra0b3ff21d3f0", "r6dc0b8d9e104"]
+      },
+      "queries": [
+        { "id": "q0101", "bucket": "continuous_cjk", "split": "baseline", "query": "数据备份", "relevantIds": ["r7dea70aa0b5b"] },
+        { "id": "q0102", "bucket": "mixed_language", "split": "baseline", "query": "API接口校验", "relevantIds": ["r22413640d2de"] },
+        { "id": "q0103", "bucket": "punctuation_boundary", "split": "baseline", "query": "预算-复核", "relevantIds": ["rc939d4acd354"] },
+        { "id": "q0104", "bucket": "short_term", "split": "baseline", "query": "发票夹", "relevantIds": ["r69f5c4a127d4"] }
+      ]
+    },
+    {
+      "id": "g02",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-02", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-02",
+      "records": [
+        { "id": "r539be15d088f", "content": "财务月底完成电子发票归档同时整理合同附件与审批记录" },
+        { "id": "r48c3b6a8dcfa", "content": "平台通过Redis执行缓存清理并核对热点数据" },
+        { "id": "r18b4b0432244", "content": "区域报表分别覆盖华北业务与华南业务" },
+        { "id": "rf290df5f5446", "content": "数据库备份盘保存在机房防火柜内" }
+      ],
+      "sharedInterference": [
+        { "id": "r608814cfee0b", "content": "采购审批流程" },
+        { "id": "rd48023a17838", "content": "Kotlin构建插件" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["d0aw2", "d37rc", "d00to", "d029q", "d037b", "d037r", "d0392", "d039q", "d03t5", "d03y1", "d03yr", "d05a8"],
+        "punctuation_boundary": ["e4cru", "e4u0i", "e4cr5", "e00ia", "e0hgg", "e0i0g", "e0i4c", "e0i4k", "e0i69", "e0i6y", "e0i7h", "e0ibe"],
+        "short_term": ["f2sek", "f2sts", "f204h", "f2062", "f20bn", "f20ek", "f20fy", "f20vr", "f262n", "f2cid", "f2ct8", "f2cts"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["r52ba446f7a16", "ra905bad85e92", "r723befcb6fa2", "re9d65dbb7afc", "r8e7d2873d69b", "r30b19ad71da5", "r61f71f4c2cbd", "re9a946989332", "re181ef1f9da3", "r0923cb3f1b56", "r45fcf8cfe1bf", "r4121e6ffde8c"],
+        "punctuation_boundary": ["r8d1110b787c9", "r07ebf8581a28", "r4f938db9a29f", "r5065e62e5ccc", "re2465054d97c", "r9c85674215f8", "rb7993c7cd466", "r2a33673cd9f1", "rbc5f49885139", "rb1d74d53b9eb", "r4354de2287e3", "r453abed4ac62"],
+        "short_term": ["rda4a9b369e7e", "r47c10b65f6f5", "re4f6804874c7", "raa3889981c6c", "r9c76cf78c165", "r3302c1df0ec2", "rb214c84de0a0", "rc073eefe78e2", "r4c76170b2f01", "r4607293e3612", "r137b766c3b8b", "r22009ebd6647"]
+      },
+      "queries": [
+        { "id": "q0201", "bucket": "continuous_cjk", "split": "baseline", "query": "发票归档", "relevantIds": ["r539be15d088f"] },
+        { "id": "q0202", "bucket": "mixed_language", "split": "baseline", "query": "Redis缓存清理", "relevantIds": ["r48c3b6a8dcfa"] },
+        { "id": "q0203", "bucket": "punctuation_boundary", "split": "baseline", "query": "华北/华南", "relevantIds": ["r18b4b0432244"] },
+        { "id": "q0204", "bucket": "short_term", "split": "baseline", "query": "备份盘", "relevantIds": ["rf290df5f5446"] }
+      ]
+    },
+    {
+      "id": "g03",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-03", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-03",
+      "records": [
+        { "id": "rb2076776e931", "content": "运维周三安排机房设备巡检并登记温度电源网络和值班情况" },
+        { "id": "rf6e427fe22d5", "content": "发布前使用Docker完成镜像扫描并登记漏洞结果" },
+        { "id": "rfc01ae9e5b58", "content": "系统演练依次检查数据备份与灾难恢复步骤" },
+        { "id": "r6b2f45bc5ce4", "content": "机房巡检表由夜班人员每天填写" }
+      ],
+      "sharedInterference": [
+        { "id": "r122a6d65670e", "content": "会议室预订安排" },
+        { "id": "r9c8e232f5cfd", "content": "Nginx网关证书" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["g0k88", "g0k8p", "g1k88", "g1k8h", "g22ia", "g2isa", "g57qc", "g57qp", "g1k83", "g1k8p", "g1xx0", "g1xxx"],
+        "punctuation_boundary": ["h01y5", "h2niu", "h2npg", "h2npw", "h5a2n", "h017x", "h17xl", "h2nil", "h2npn", "h333j", "h5k01", "h5k33"],
+        "short_term": ["i33xk", "i0r2i", "i5lll", "i5lmd", "i3xkh", "i3xkp", "i5f5l", "i0104", "i03xk", "i03xn", "i05ll", "i0f54"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["rc6770de8f3b2", "rd8d7c28f99aa", "r297832d36c3f", "r2502fb6bab11", "r2b9122e35715", "r2a36730914eb", "r35ca60793d2f", "rdd821a06cd33", "r29cc25eae231", "r0ed1777a366c", "r1c840aaa6a0c", "re43f74109147"],
+        "punctuation_boundary": ["r55fc39bdd59e", "r73f557a3ba6f", "r29bd7586f348", "r4b01c20c5b50", "r32c6de676d5b", "r86973e4e689a", "r0df13df6093d", "r37bf5d0c22cb", "r092c54e5816c", "r30b7f38e303e", "rdbc2e9820d16", "r030b1e6f3d72"],
+        "short_term": ["r20a9a3768f5e", "rdd43b8923d53", "re877e53ace43", "rdba2fa1a18dd", "r61732f146148", "ra30603983b11", "r8b75a301c259", "r06e022ca00b7", "rd16ed1f82b2d", "r38bd30962aac", "r9af34a753e61", "re7401b6bca76"]
+      },
+      "queries": [
+        { "id": "q0301", "bucket": "continuous_cjk", "split": "baseline", "query": "机房巡检", "relevantIds": ["rb2076776e931"] },
+        { "id": "q0302", "bucket": "mixed_language", "split": "baseline", "query": "Docker镜像扫描", "relevantIds": ["rf6e427fe22d5"] },
+        { "id": "q0303", "bucket": "punctuation_boundary", "split": "baseline", "query": "备份，恢复", "relevantIds": ["rfc01ae9e5b58"] },
+        { "id": "q0304", "bucket": "short_term", "split": "baseline", "query": "巡检表", "relevantIds": ["r6b2f45bc5ce4"] }
+      ]
+    },
+    {
+      "id": "g04",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-04", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-04",
+      "records": [
+        { "id": "r10eff8e19f91", "content": "法务提前准备供应商合同续签同时核验授权材料和付款条款" },
+        { "id": "r7698a96f6148", "content": "前端使用TypeScript执行类型检查并修复构建错误" },
+        { "id": "r08a6455168c6", "content": "项目会议更新主要风险与跟踪清单内容" },
+        { "id": "r0be809269338", "content": "供应商续签函需要法务盖章后寄出" }
+      ],
+      "sharedInterference": [
+        { "id": "r4f5877fe3554", "content": "食堂菜单更新" },
+        { "id": "r86485399233c", "content": "RabbitMQ队列监控" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["j3r4h", "j3rlm", "j4eki", "j4ekz", "j0ytr", "j3r3r", "j4efq", "j00yt", "j03r3", "j04ek", "j04hu", "j062s"],
+        "punctuation_boundary": ["k0abp", "k40ab", "k4ddd", "k4sux", "k4vlv", "k00al", "k04v1", "k07a1", "k07ab", "k07al", "k09eu", "k09ho"],
+        "short_term": ["l4r3n", "l4eqw", "l04eq", "l04r3", "l0bt7", "l0jlm", "l0kfg", "l0kfp", "l0lmx", "l0m4r", "l0r3n", "l0yh6"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["r18955b861426", "r77fcd2761862", "rfd82eca3916e", "rd1a925d3622c", "ra4f586bf6958", "rb4aaacdf625b", "r080065340ef7", "r13db320ec9f5", "rd30a45855863", "r6b775e7d0188", "rd2e46dc8e638", "r0d7396262cbe"],
+        "punctuation_boundary": ["r4dd430ee1298", "r741df8f5efe6", "ra783950e9fca", "rdfc6983decfe", "r06fb22c32084", "r39030a383ea9", "rbb5f81498b95", "rb3f5c05c16a5", "r7d87743fc828", "r61db2da565c8", "r41fb4e35f0c9", "rc57dccd56538"],
+        "short_term": ["r7f92e5ed74ae", "r1aa48a7c27cb", "r19c5a2aa2a80", "r7c14400d3447", "r741bd5f6a627", "r659baf6a9fb8", "redd28c44c4c7", "r431b559bb800", "rc631f968d460", "r16c11b55fa64", "r2ac5c906835e", "r968dc085c4dd"]
+      },
+      "queries": [
+        { "id": "q0401", "bucket": "continuous_cjk", "split": "holdout", "query": "合同续签", "relevantIds": ["r10eff8e19f91"] },
+        { "id": "q0402", "bucket": "mixed_language", "split": "holdout", "query": "TypeScript类型检查", "relevantIds": ["r7698a96f6148"] },
+        { "id": "q0403", "bucket": "punctuation_boundary", "split": "holdout", "query": "风险；清单", "relevantIds": ["r08a6455168c6"] },
+        { "id": "q0404", "bucket": "short_term", "split": "holdout", "query": "续签函", "relevantIds": ["r0be809269338"] }
+      ]
+    },
+    {
+      "id": "g05",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-05", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-05",
+      "records": [
+        { "id": "r5721e89c9d20", "content": "晚上进行概率课程复习并整理例题笔记和下周学习计划" },
+        { "id": "r0623054cf0cd", "content": "数据库团队通过PostgreSQL完成索引优化并复测慢查询" },
+        { "id": "rd1570d1f96c7", "content": "办公地点位于北京城区的海淀园区" },
+        { "id": "r1a7a7979f082", "content": "服务缓存层负责保存近期热点数据" }
+      ],
+      "sharedInterference": [
+        { "id": "r0ba8a25c8d80", "content": "工位搬迁通知" },
+        { "id": "rf29bb417f0d0", "content": "Elasticsearch日志检索" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["m0d49", "m0xl1", "m00d4", "m00gl", "m00gp", "m071e", "m071f", "m07wn", "m0ad4", "m0b71", "m0bwn", "m0bwq"],
+        "punctuation_boundary": ["n16ih", "n16iy", "n5jgu", "n5jg3", "n00ch", "n00ih", "n016i", "n016n", "n02on", "n04q0", "n04qv", "n05jn"],
+        "short_term": ["o0e50", "o0ez7", "o3b0e", "o46lp", "o46lq", "o00e5", "o00ez", "o0460", "o06lq", "o0b0d", "o0b0e", "o0e1d"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["rf246191c0d81", "rea0377175867", "r6cad22273cdd", "r2ee3061724e1", "r2ca462bceba9", "r22689be987fd", "re7a5a3dd68ff", "r6d5f139447ed", "rba75c1f85bc0", "r503703b258e1", "r1f091589c861", "r26b35df40da1"],
+        "punctuation_boundary": ["r28c72828f72e", "ra1ca0fdeb0b8", "rf60e2d5019e3", "r2d76735b01af", "r56a37b60d871", "r9b0c7325c075", "r2302acd14fba", "r1a8832e0b38c", "r20b2b2fe6ac4", "r8c436f96226d", "rbc6cdbcd3e32", "r3cc06c1ea77d"],
+        "short_term": ["r7e3344914b32", "rfcecbb312fac", "r3dd7da3bd6a6", "r5dcb929780c3", "r530636b6ea47", "rfc08d3177295", "rf5b88fa51f3e", "re02754614f0d", "r26d0f066942d", "r8336807fb994", "rc035b59ca810", "reb2c0c004c6c"]
+      },
+      "queries": [
+        { "id": "q0501", "bucket": "continuous_cjk", "split": "holdout", "query": "课程复习", "relevantIds": ["r5721e89c9d20"] },
+        { "id": "q0502", "bucket": "mixed_language", "split": "holdout", "query": "PostgreSQL索引优化", "relevantIds": ["r0623054cf0cd"] },
+        { "id": "q0503", "bucket": "punctuation_boundary", "split": "holdout", "query": "北京（海淀）", "relevantIds": ["rd1570d1f96c7"] },
+        { "id": "q0504", "bucket": "short_term", "split": "holdout", "query": "缓存层", "relevantIds": ["r1a7a7979f082"] }
+      ]
+    },
+    {
+      "id": "g06",
+      "owner": { "tenantId": "lexical-tenant", "userId": "lexical-user-06", "agentId": "lexical-agent" },
+      "sourceSessionId": "lexical-source-06",
+      "records": [
+        { "id": "re8b59c1dd92d", "content": "每季度预约车辆例行保养同时检查轮胎保险和行驶记录" },
+        { "id": "r55ee6cb85bd0", "content": "门户接入OAuth处理登录回调并记录异常状态" },
+        { "id": "rd7ac90bc5fb2", "content": "记录显示甲乙小组与丙丁小组需要分别核对" },
+        { "id": "r8fdb7fdfc2b7", "content": "Docker镜像库只保存通过安全扫描的版本" }
+      ],
+      "sharedInterference": [
+        { "id": "rbdbcdd367bb7", "content": "园区访客登记" },
+        { "id": "r4ee6454195ab", "content": "Prometheus告警规则" }
+      ],
+      "distractorCodes": {
+        "continuous_cjk": ["p0ftp", "p0igo", "p0igz", "p0j9m", "p0jig", "p0q8d", "p0q8k", "p0sig", "p0tpv", "p08d8", "p09m8", "p0pig"],
+        "punctuation_boundary": ["q0z24", "q00z2", "q0bo2", "q0bz2", "q0d6f", "q0d6s", "q0dac", "q0r0z", "q0ruz", "q0s0c", "q0s0z", "q0s19"],
+        "short_term": ["r2a18", "r2aqx", "r0391", "r03yq", "r06p2", "r0918", "r0f3o", "r0f3w", "r0fg3", "r0g3o", "r0kg3", "r0mlm"]
+      },
+      "distractorIds": {
+        "continuous_cjk": ["r70c337e4e0d8", "rf1546e1ebf52", "r4b052ee5b6a4", "r4c48a4d5b19f", "r39368e8b8304", "rec1145a64271", "r3b854ea2c245", "r69b2e1c70031", "r11b2055865fb", "r81dcd4ef025a", "r1318408c507c", "rdbb6551703f2"],
+        "punctuation_boundary": ["rcb73fcafe45f", "rfc5780a4ffdc", "r691841e6d27d", "r551cfdfbb9ad", "r9e90cad91485", "r1e36b0a6bc7a", "r7ca2382789f5", "r36e5c2e78d12", "r84f0f3f0361e", "rb4c1f33f4abf", "rd13ad4bb4550", "r539327435659"],
+        "short_term": ["r69e2567e3c47", "rfb23d725f329", "r4f9ecc98c56b", "r48c355477edc", "rfa997f752e24", "r33a45c71ade5", "r286517b812de", "r2b05ad021023", "r56891ffd8522", "r8f028a354656", "r771104f1d31a", "r9ccda1fd9e78"]
+      },
+      "queries": [
+        { "id": "q0601", "bucket": "continuous_cjk", "split": "baseline", "query": "车辆保养", "relevantIds": ["re8b59c1dd92d"] },
+        { "id": "q0602", "bucket": "mixed_language", "split": "baseline", "query": "OAuth登录回调", "relevantIds": ["r55ee6cb85bd0"] },
+        { "id": "q0603", "bucket": "punctuation_boundary", "split": "baseline", "query": "甲乙，丙丁", "relevantIds": ["rd7ac90bc5fb2"] },
+        { "id": "q0604", "bucket": "short_term", "split": "baseline", "query": "镜像库", "relevantIds": ["r8fdb7fdfc2b7"] }
+      ]
+    }
+  ],
+  "filterRecords": [
+    { "id": "ra06dc82c53df", "owner": { "tenantId": "lexical-tenant", "userId": "foreign-user", "agentId": "lexical-agent" }, "sourceSessionId": "filter-current", "content": "隔离用户暗号是紫藤门", "status": "active", "visibility": "recallable" },
+    { "id": "r33b9bd1e28f4", "owner": { "tenantId": "foreign-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sourceSessionId": "filter-current", "content": "隔离租户暗号是白鹭桥", "status": "active", "visibility": "recallable" },
+    { "id": "r2a893c35b026", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "foreign-agent" }, "sourceSessionId": "filter-current", "content": "隔离智能体暗号是青石塔", "status": "active", "visibility": "recallable" },
+    { "id": "r6b82950ed4ee", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sourceSessionId": "filter-old", "content": "旧会话暗号是丹桂亭", "status": "active", "visibility": "recallable" },
+    { "id": "r719fa0a63abf", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sourceSessionId": "filter-current", "content": "已删除暗号是玄武井", "status": "deleted", "visibility": "source_only" },
+    { "id": "rcc7209179854", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sourceSessionId": "filter-current", "content": "过期暗号是琥珀湾", "status": "active", "visibility": "recallable", "validUntil": "2020-01-01T00:00:00.000Z" }
+  ],
+  "filterQueries": [
+    { "id": "q9001", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": false, "query": "隔离用户暗号是紫藤门", "forbiddenIds": ["ra06dc82c53df"] },
+    { "id": "q9002", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": false, "query": "隔离租户暗号是白鹭桥", "forbiddenIds": ["r33b9bd1e28f4"] },
+    { "id": "q9003", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": false, "query": "隔离智能体暗号是青石塔", "forbiddenIds": ["r2a893c35b026"] },
+    { "id": "q9004", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": true, "query": "旧会话暗号是丹桂亭", "forbiddenIds": ["r6b82950ed4ee"] },
+    { "id": "q9005", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": false, "query": "已删除暗号是玄武井", "forbiddenIds": ["r719fa0a63abf"] },
+    { "id": "q9006", "owner": { "tenantId": "lexical-tenant", "userId": "lexical-filter-user", "agentId": "lexical-agent" }, "sessionId": "filter-current", "sessionOnly": false, "query": "过期暗号是琥珀湾", "forbiddenIds": ["rcc7209179854"] }
+  ]
+}

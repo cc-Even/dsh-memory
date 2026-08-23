@@ -27,13 +27,14 @@ import type { ExtractedMemory, ExtractionResult, ReconcileOperation } from './mo
 import {
   HASH_EMBEDDING_DIMENSIONS,
   HASH_EMBEDDING_SPACE_ID,
+  CjkBigramTokenizer,
   bm25,
   classifyIntent,
   cosine,
   fuse,
   hashEmbedding,
-  tokenize,
 } from './retrieval.ts'
+import type { LexicalTokenizer } from './retrieval.ts'
 import { memoryDomainSpec } from './schema.ts'
 import type { MemoryScopeKey, MemoryScopeState, StoredMemoryJob } from './schema.ts'
 import { findMemoryStateViolation } from './state-invariant.ts'
@@ -69,6 +70,7 @@ export type * from './types.ts'
 export {
   HASH_EMBEDDING_DIMENSIONS,
   HASH_EMBEDDING_SPACE_ID,
+  CjkBigramTokenizer,
   bm25,
   classifyIntent,
   cosine,
@@ -76,6 +78,7 @@ export {
   hashEmbedding,
   tokenize,
 } from './retrieval.ts'
+export type { LexicalTokenizer } from './retrieval.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -98,6 +101,11 @@ export type EmbeddingConfig =
     readonly maxRetries?: number
     readonly retryBaseDelayMs?: number
   }
+
+/** Loader-selectable BM25 tokenization policy. */
+export type TokenizerConfig =
+  | { readonly kind: 'cjk-bigram' }
+  | { readonly kind: 'legacy' }
 
 /** Deployment configuration for extraction, hybrid recall, and automatic turn integration. */
 export interface Config {
@@ -141,6 +149,10 @@ export interface Config {
   embeddingProvider?: EmbeddingProvider
   /** Loader-safe embedding configuration. The default is the portable hash provider. */
   embedding?: EmbeddingConfig
+  /** Trusted programmatic lexical tokenizer; mutually exclusive with `tokenizer`. */
+  lexicalTokenizer?: LexicalTokenizer
+  /** Loader-safe lexical tokenizer selection. */
+  tokenizer?: TokenizerConfig
 }
 
 type ResolvedEmbeddingConfig = EmbeddingConfig | {
@@ -151,6 +163,8 @@ type ResolvedEmbeddingConfig = EmbeddingConfig | {
   readonly normalization: 'l2'
   readonly quality: 'portable-hash' | 'trained'
 }
+
+type ResolvedTokenizerConfig = TokenizerConfig | { readonly kind: 'programmatic' }
 
 /** Fully materialized, secret-free service policy. */
 export interface ResolvedConfig {
@@ -173,6 +187,7 @@ export interface ResolvedConfig {
   readonly bm25B: number
   readonly profileFields: readonly string[]
   readonly embedding: ResolvedEmbeddingConfig
+  readonly tokenizer: ResolvedTokenizerConfig
 }
 
 const DEFAULT_PROFILE_FIELDS = ['name', 'age', 'location', 'timezone', 'language', 'occupation']
@@ -217,6 +232,11 @@ export const Config: s<Config> = s.object({
       retryBaseDelayMs: s.number().step(1).min(1),
     }),
   ]),
+  lexicalTokenizer: s.any<LexicalTokenizer>().hidden(),
+  tokenizer: s.union([
+    s.object({ kind: s.const('cjk-bigram').required() }),
+    s.object({ kind: s.const('legacy').required() }),
+  ]),
 })
 
 /**
@@ -228,6 +248,9 @@ export function resolveConfig(config: Config): ResolvedConfig {
   if (config.embeddingProvider !== undefined && config.embedding !== undefined) {
     throw new MemoryError('INVALID_INPUT', 'embeddingProvider and embedding config are mutually exclusive')
   }
+  if (config.lexicalTokenizer !== undefined && config.tokenizer !== undefined) {
+    throw new MemoryError('INVALID_INPUT', 'lexicalTokenizer and tokenizer config are mutually exclusive')
+  }
   const provider = requireNonEmpty(config.provider, 'provider')
   const model = requireNonEmpty(config.model, 'model')
   const userId = config.userId === undefined
@@ -236,6 +259,9 @@ export function resolveConfig(config: Config): ResolvedConfig {
   const embedding = config.embeddingProvider === undefined
     ? normalizeEmbeddingConfig(config.embedding)
     : programmaticEmbeddingConfig(describeEmbeddingProvider(config.embeddingProvider))
+  const tokenizer = config.lexicalTokenizer === undefined
+    ? normalizeTokenizerConfig(config.tokenizer)
+    : programmaticTokenizerConfig(config.lexicalTokenizer)
   const resolved: ResolvedConfig = {
     provider,
     model,
@@ -256,8 +282,97 @@ export function resolveConfig(config: Config): ResolvedConfig {
     bm25B: bounded(config.bm25B ?? 0.75, 0, 1, 'bm25B'),
     profileFields: normalizeTags(config.profileFields ?? DEFAULT_PROFILE_FIELDS),
     embedding,
+    tokenizer,
   }
   return resolved
+}
+
+function normalizeTokenizerConfig(value: TokenizerConfig | undefined): TokenizerConfig {
+  if (value === undefined) return { kind: 'cjk-bigram' }
+  if (value === null || typeof value !== 'object') {
+    throw new MemoryError('INVALID_INPUT', 'tokenizer config must be an object')
+  }
+  if (value.kind !== 'cjk-bigram' && value.kind !== 'legacy') {
+    throw new MemoryError('INVALID_INPUT', 'tokenizer kind is invalid')
+  }
+  assertAllowedKeys(value, ['kind'], 'tokenizer')
+  return { kind: value.kind }
+}
+
+function programmaticTokenizerConfig(tokenizer: LexicalTokenizer): ResolvedTokenizerConfig {
+  if (tokenizer === null || typeof tokenizer !== 'object') {
+    throw new MemoryError('INVALID_INPUT', 'lexicalTokenizer must provide tokenize(text)')
+  }
+  let method: unknown
+  try {
+    method = tokenizer.tokenize
+  } catch {
+    throw tokenizationFailure()
+  }
+  if (typeof method !== 'function') {
+    throw new MemoryError('INVALID_INPUT', 'lexicalTokenizer must provide tokenize(text)')
+  }
+  const tokens = safeTokenizerCall(tokenizer, '')
+  if (tokens.length !== 0) throw tokenizationFailure()
+  return { kind: 'programmatic' }
+}
+
+const LEGACY_TOKEN_PATTERN = /[a-zA-Z0-9]+|[\u3400-\u9fff]+/gu
+const MAX_TOKEN_COUNT = 100_000
+const MAX_TOKEN_CHARS = 256
+
+class LegacyLexicalTokenizer implements LexicalTokenizer {
+  tokenize(text: string): string[] {
+    return Array.from(text.matchAll(LEGACY_TOKEN_PATTERN), match => match[0].toLowerCase())
+  }
+}
+
+class ValidatingLexicalTokenizer implements LexicalTokenizer {
+  constructor(private readonly implementation: LexicalTokenizer) {}
+
+  tokenize(text: string): string[] {
+    return safeTokenizerCall(this.implementation, text)
+  }
+}
+
+function tokenizerFromConfig(
+  programmatic: LexicalTokenizer | undefined,
+  config: ResolvedTokenizerConfig,
+): LexicalTokenizer {
+  if (programmatic !== undefined) return new ValidatingLexicalTokenizer(programmatic)
+  if (config.kind === 'legacy') return new LegacyLexicalTokenizer()
+  if (config.kind === 'cjk-bigram') return new CjkBigramTokenizer()
+  throw new MemoryError('INVALID_INPUT', 'programmatic lexicalTokenizer is missing')
+}
+
+function safeTokenizerCall(tokenizer: LexicalTokenizer, text: string): string[] {
+  try {
+    const method = tokenizer.tokenize
+    if (typeof method !== 'function') throw tokenizationFailure()
+    const value = method.call(tokenizer, text)
+    if (!Array.isArray(value)) throw tokenizationFailure()
+    const length = value.length
+    if (length > MAX_TOKEN_COUNT) throw tokenizationFailure()
+    const copy: string[] = []
+    for (const token of value) {
+      if (copy.length >= MAX_TOKEN_COUNT
+        || typeof token !== 'string'
+        || token.length === 0
+        || token.length > MAX_TOKEN_CHARS) throw tokenizationFailure()
+      copy.push(token)
+    }
+    return copy
+  } catch {
+    throw tokenizationFailure()
+  }
+}
+
+function tokenizationFailure(): MemoryError {
+  return new MemoryError('TOKENIZATION_FAILED', 'lexical tokenizer failed')
+}
+
+function isTokenizationFailure(error: unknown): error is MemoryError {
+  return error instanceof MemoryError && error.code === 'TOKENIZATION_FAILED'
 }
 
 function modelRoute(config: ResolvedConfig): { provider: string; model: string; maxTokens: number } {
@@ -372,6 +487,7 @@ export class MemoryService extends Service implements MemoryCapability {
   private readonly embeddingProvider: EmbeddingProvider
   private readonly embeddingDescription: EmbeddingDescription
   private readonly portableHashImplementation: boolean
+  private readonly lexicalTokenizer: LexicalTokenizer
   private table?: KvTable<MemoryScopeKey, MemoryScopeState>
   private readonly operationTails = new Map<MemoryScopeKey, Promise<void>>()
   private admissionOpen = true
@@ -389,6 +505,7 @@ export class MemoryService extends Service implements MemoryCapability {
       && this.embeddingDescription.quality === 'portable-hash'
       && this.embeddingDescription.spaceId === HASH_EMBEDDING_SPACE_ID
       && this.embeddingDescription.dimensions === HASH_EMBEDDING_DIMENSIONS
+    this.lexicalTokenizer = tokenizerFromConfig(config.lexicalTokenizer, this.config.tokenizer)
   }
 
   /** Open durable state, recover interrupted jobs, and install optional turn hooks. */
@@ -518,7 +635,10 @@ export class MemoryService extends Service implements MemoryCapability {
         return await this.commitSuccess(key, accepted, job, raw.id, embedded)
       } catch (error) {
         if (completionAttempted) throw error
-        const warning = error instanceof Error ? error.message : String(error)
+        const callerAborted = signal?.aborted === true
+        const warning = callerAborted
+          ? 'memory enrichment aborted'
+          : error instanceof Error ? error.message : String(error)
         const degradedJob: StoredMemoryJob = { ...job, status: 'degraded', warnings: [warning] }
         const degraded: MemoryScopeState = {
           revision: accepted.revision + 1,
@@ -526,6 +646,7 @@ export class MemoryService extends Service implements MemoryCapability {
           jobs: replaceJob(accepted.jobs, degradedJob),
         }
         await this.writeState(key, accepted, degraded)
+        if (callerAborted) throw signal.reason ?? error
         return receiptOf(degradedJob)
       }
     })
@@ -542,6 +663,9 @@ export class MemoryService extends Service implements MemoryCapability {
     throwIfAborted(signal)
     const scope = resolveScope(input.scope)
     const query = requireNonEmpty(input.query, 'query')
+    if (query.length > this.config.maxInputChars) {
+      throw new MemoryError('INVALID_INPUT', `query exceeds maxInputChars (${this.config.maxInputChars})`)
+    }
     const limit = input.limit === undefined ? this.config.recallLimit : positiveInteger(input.limit, 'limit')
     const profileLimit = input.profileLimit === undefined
       ? this.config.profileLimit
@@ -568,11 +692,23 @@ export class MemoryService extends Service implements MemoryCapability {
       }
     }
     const profileCandidates = candidates.filter(record => PROFILE_LAYERS.has(record.layer))
-    const profile = this.rank(query, queryVector, intent, profileCandidates, input.includeEvolution ?? false, state.records)
+    const normalCandidates = candidates.filter(record => !PROFILE_LAYERS.has(record.layer))
+    let profileRanked: MemoryHit[]
+    let normalRanked: MemoryHit[]
+    let lexicalUnavailable = false
+    try {
+      profileRanked = this.rank(query, queryVector, intent, profileCandidates, input.includeEvolution ?? false, state.records, true)
+      normalRanked = this.rank(query, queryVector, intent, normalCandidates, input.includeEvolution ?? false, state.records, true)
+    } catch (error) {
+      if (!isTokenizationFailure(error)) throw error
+      lexicalUnavailable = true
+      profileRanked = this.rank(query, queryVector, intent, profileCandidates, input.includeEvolution ?? false, state.records, false)
+      normalRanked = this.rank(query, queryVector, intent, normalCandidates, input.includeEvolution ?? false, state.records, false)
+    }
+    const profile = profileRanked
       .slice(0, profileLimit)
       .map(hit => ({ ...hit, matchedBy: [...hit.matchedBy, 'profile' as const] }))
-    const normalCandidates = candidates.filter(record => !PROFILE_LAYERS.has(record.layer))
-    const normal = this.rank(query, queryVector, intent, normalCandidates, input.includeEvolution ?? false, state.records)
+    const normal = normalRanked
       .slice(0, limit)
     const scores = [...profile, ...normal].slice(0, 3).map(hit => hit.score)
     const scoreAverage = scores.reduce((sum, score) => sum + score, 0) / scores.length
@@ -584,6 +720,7 @@ export class MemoryService extends Service implements MemoryCapability {
         intent,
         confidence,
         degradedChannels: [
+          ...(lexicalUnavailable ? ['lexical:tokenizer-unavailable'] : []),
           ...(semanticUnavailable ? ['semantic:provider-unavailable'] : []),
           ...(this.embeddingDescription.quality === 'portable-hash' ? ['semantic:portable-hash'] : []),
           'tag:unavailable',
@@ -817,21 +954,44 @@ export class MemoryService extends Service implements MemoryCapability {
       && (record.layer === 'l2_fact' || record.layer === 'l4_identity'))
     if (candidates.length === 0) return []
     let queryVector: readonly number[] | undefined
+    let semanticUnavailable = false
     try {
       queryVector = this.portableHashImplementation
         ? hashEmbedding(query)
         : requiredArrayValue(await this.embedTexts([query], signal), 0, 'reconcile query embedding')
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error
+      semanticUnavailable = true
     }
-    return this.rank(
-      query,
-      queryVector,
-      classifyIntent(query),
-      candidates,
-      false,
-      records,
-    ).slice(0, this.config.reconcileCandidateLimit).map(hit => hit.memory)
+    let ranked: MemoryHit[]
+    try {
+      ranked = this.rank(
+        query,
+        queryVector,
+        classifyIntent(query),
+        candidates,
+        false,
+        records,
+        true,
+      )
+    } catch (error) {
+      if (!isTokenizationFailure(error)) throw error
+      const semanticUsable = !semanticUnavailable
+        && queryVector !== undefined
+        && hasNonZeroVector(queryVector)
+        && candidates.some(record => hasNonZeroVector(record.embedding.vector))
+      if (!semanticUsable) throw tokenizationFailure()
+      ranked = this.rank(
+        query,
+        queryVector,
+        classifyIntent(query),
+        candidates,
+        false,
+        records,
+        false,
+      )
+    }
+    return ranked.slice(0, this.config.reconcileCandidateLimit).map(hit => hit.memory)
   }
 
   private applyExtraction(
@@ -990,6 +1150,7 @@ export class MemoryService extends Service implements MemoryCapability {
     records: readonly MemoryRecord[],
     includeEvolution: boolean,
     allRecords: readonly MemoryRecord[],
+    lexicalEnabled: boolean,
   ): MemoryHit[] {
     if (records.length === 0) return []
     const semantic = queryVector === undefined
@@ -999,10 +1160,20 @@ export class MemoryService extends Service implements MemoryCapability {
         .map(record => ({ record, score: cosine(queryVector, record.embedding.vector) }))
         .filter(entry => entry.score >= this.config.minSemanticScore)
         .sort((left, right) => right.score - left.score)
-    const lexicalScores = bm25(tokenize(query), records.map(record => `${record.content}\n${record.tags.join(' ')}`), this.config.bm25K1, this.config.bm25B)
-    const lexical = records.map((record, index) => ({ record, score: lexicalScores[index] ?? 0 }))
-      .filter(entry => entry.score > 0)
-      .sort((left, right) => right.score - left.score)
+    const lexical = lexicalEnabled
+      ? (() => {
+        const lexicalScores = bm25(
+          this.lexicalTokenizer.tokenize(query),
+          records.map(record => `${record.content}\n${record.tags.map(tag => tag.trim().toLowerCase()).join(' ')}`),
+          this.config.bm25K1,
+          this.config.bm25B,
+          this.lexicalTokenizer,
+        )
+        return records.map((record, index) => ({ record, score: lexicalScores[index] ?? 0 }))
+          .filter(entry => entry.score > 0)
+          .sort((left, right) => right.score - left.score)
+      })()
+      : []
     const weights = intent === 'navigational'
       ? { semantic: 0.4, lexical: 1.4 }
       : intent === 'conceptual'

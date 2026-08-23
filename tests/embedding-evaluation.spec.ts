@@ -242,6 +242,7 @@ async function setupHashMemory(): Promise<Context> {
     provider: 'missing-evaluation-provider',
     model: 'missing-evaluation-model',
     userId: 'unused-evaluation-user',
+    tokenizer: { kind: 'legacy' },
     autoCapture: false,
     autoRecall: false,
   })

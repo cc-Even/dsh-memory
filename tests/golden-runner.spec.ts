@@ -476,15 +476,18 @@ describe('MEM-003A programmatic runner', () => {
     expect(first).not.toMatch(/dsh-memory-golden-|\/tmp\//u)
   }, 120_000)
 
-  it('freezes an exact repeats=2 baseline and mechanically identical overall/bucket floors', async () => {
-    const [{ runGolden }, { canonicalJson }] = await Promise.all([loadRunner(), loadMetrics()])
+  it('keeps the pre-MEM-102 legacy snapshot and requires the new default to pass every old floor', async () => {
+    const { runGolden } = await loadRunner()
     const [baseline, gates, current] = await Promise.all([
       readFile(baselinePath, 'utf8').then(text => JSON.parse(text) as GoldenReport),
       readFile(gatesPath, 'utf8').then(text => JSON.parse(text) as GoldenGates),
       runGolden({ datasetPath, repeats: 2 }),
     ])
 
-    expect(canonicalJson(baseline)).toBe(canonicalJson(current))
+    expect(baseline).toMatchObject({
+      runner: { repeats: 2 },
+      embeddingSpace: { id: expect.any(String), dimensions: 256 },
+    })
     expect(gates).toMatchObject({
       schemaVersion: 1,
       dataset: baseline.dataset,
@@ -503,13 +506,21 @@ describe('MEM-003A programmatic runner', () => {
     })
     expect(gates.buckets).toHaveLength(14)
     for (const bucket of baseline.buckets) {
-      expect(gates.buckets).toContainEqual({
+      const floor = {
         bucket: bucket.bucket,
         language: bucket.language,
         recallAt5: { macroFloor: bucket.recallAt5.macro, microFloor: bucket.recallAt5.micro },
         recallAt10: { macroFloor: bucket.recallAt10.macro, microFloor: bucket.recallAt10.micro },
         mrrAt10: { valueFloor: bucket.mrrAt10.value },
-      })
+      }
+      expect(gates.buckets).toContainEqual(floor)
+      const actual = current.buckets.find(cell => cell.bucket === bucket.bucket && cell.language === bucket.language)
+      expect(actual, `${bucket.bucket}/${bucket.language}`).toBeDefined()
+      expect(actual?.recallAt5.macro).toBeGreaterThanOrEqual(floor.recallAt5.macroFloor)
+      expect(actual?.recallAt5.micro).toBeGreaterThanOrEqual(floor.recallAt5.microFloor)
+      expect(actual?.recallAt10.macro).toBeGreaterThanOrEqual(floor.recallAt10.macroFloor)
+      expect(actual?.recallAt10.micro).toBeGreaterThanOrEqual(floor.recallAt10.microFloor)
+      expect(actual?.mrrAt10.value).toBeGreaterThanOrEqual(floor.mrrAt10.valueFloor)
     }
   }, 120_000)
 })
@@ -535,25 +546,27 @@ describe('MEM-003A CLI and package contract', () => {
     expect(result.stdout).toBe(`${canonicalJson(parsed)}\n`)
   }, 120_000)
 
-  it('exits 2 when one mechanically derived quality floor is raised above the baseline', async () => {
+  it('exits 2 when one quality floor is raised above the current default report', async () => {
+    const { runGolden } = await loadRunner()
+    const current = await runGolden({ datasetPath, repeats: 1 })
     const gates = JSON.parse(await readFile(gatesPath, 'utf8')) as GoldenGates
     const candidates = [
       {
-        value: gates.overall.recallAt5.macroFloor,
+        value: current.metrics.recallAt5.macro,
         set: (value: number) => { gates.overall.recallAt5.macroFloor = value },
       },
       {
-        value: gates.overall.recallAt10.macroFloor,
+        value: current.metrics.recallAt10.macro,
         set: (value: number) => { gates.overall.recallAt10.macroFloor = value },
       },
       {
-        value: gates.overall.mrrAt10.valueFloor,
+        value: current.metrics.mrrAt10.value,
         set: (value: number) => { gates.overall.mrrAt10.valueFloor = value },
       },
     ]
     const target = candidates.find(candidate => candidate.value < 1)
-    if (target === undefined) throw new Error('expected at least one non-perfect hash baseline metric')
-    target.set(Number((target.value + 0.000001).toFixed(6)))
+    if (target === undefined) throw new Error('expected at least one non-perfect current default metric')
+    target.set((target.value + 1) / 2)
     const raisedPath = await temporaryJson(gates, 'gates.json')
     const result = runCli(['--dataset', datasetPath, '--gates', raisedPath, '--repeat', '1'])
 
