@@ -411,8 +411,8 @@
   },
   "dataset": {
     "id": "dsh-memory-lifecycle-scripted",
-    "referenceCommit": "f32fbd7846ddf5c5130c5bb696c695b56b9d70a8",
-    "version": "1.0.0"
+    "referenceCommit": "6b55f9e7afe27680ae32ba44cec183ce4e3e3f11",
+    "version": "1.1.0"
   },
   "hardChecks": {
     "observationAmbiguities": 0,

@@ -23,7 +23,12 @@ import {
 import type { EmbeddingDescription } from './embedding.ts'
 import { MemoryError } from './error.ts'
 import { extractMemories, reconcileMemories } from './model.ts'
-import type { ExtractedMemory, ExtractionResult, ReconcileOperation } from './model.ts'
+import type {
+  ExtractedMemory,
+  ExtractionResult,
+  ReconcileOperation,
+  ReconcileSourceInput,
+} from './model.ts'
 import {
   HASH_EMBEDDING_DIMENSIONS,
   HASH_EMBEDDING_SPACE_ID,
@@ -133,7 +138,7 @@ export interface Config {
   profileLimit?: number
   /** Maximum characters injected into one recalled-context message. */
   maxContextChars?: number
-  /** Candidate count presented to reconciliation. */
+  /** Maximum candidate count independently ranked for each extracted memory. */
   reconcileCandidateLimit?: number
   /** Minimum hashed-vector cosine admitted to semantic ranking without a lexical hit. */
   minSemanticScore?: number
@@ -623,11 +628,27 @@ export class MemoryService extends Service implements MemoryCapability {
           signal,
         )
         const extracted = this.sanitizeExtraction(extraction)
-        const candidates = await this.reconcileCandidates(accepted.records, extracted, signal)
-        const operations = extracted.length === 0
+        const candidateInputs = await this.reconcileCandidates(accepted.records, extracted, signal)
+        const modelInputs = candidateInputs.filter(input => input.shortlist.length > 0)
+        const automaticOperations: ReconcileOperation[] = candidateInputs
+          .filter(input => input.shortlist.length === 0)
+          .map(input => ({ type: 'ADD', sourceRef: input.source.clientRef }))
+        const modelOperations = modelInputs.length === 0
           ? []
-          : await reconcileMemories(this.ctx, modelRoute(this.config), extracted, candidates, signal)
-        const records = this.applyExtraction(accepted.records, raw, extraction, extracted, candidates, operations, now)
+          : await reconcileMemories(this.ctx, modelRoute(this.config), modelInputs, signal)
+        validatePlan(modelInputs, modelOperations)
+        const operations = orderOperations(
+          [...automaticOperations, ...modelOperations],
+          extracted,
+        )
+        const records = this.applyExtraction(
+          accepted.records,
+          raw,
+          extraction,
+          candidateInputs,
+          operations,
+          now,
+        )
         const acceptedIds = new Set(accepted.records.map(record => record.id))
         const embeddingIds = [raw.id, ...records.filter(record => !acceptedIds.has(record.id)).map(record => record.id)]
         const embedded = await this.embedSelectedRecords(records, embeddingIds, signal)
@@ -946,66 +967,85 @@ export class MemoryService extends Service implements MemoryCapability {
     records: readonly MemoryRecord[],
     extracted: readonly ExtractedMemory[],
     signal?: AbortSignal,
-  ): Promise<MemoryRecord[]> {
-    const query = extracted.map(item => item.content).join('\n')
-    if (query.length === 0) return []
-    const candidates = records.filter(record => record.status === 'active'
-      && record.visibility === 'recallable'
-      && (record.layer === 'l2_fact' || record.layer === 'l4_identity'))
-    if (candidates.length === 0) return []
-    let queryVector: readonly number[] | undefined
-    let semanticUnavailable = false
-    try {
-      queryVector = this.portableHashImplementation
-        ? hashEmbedding(query)
-        : requiredArrayValue(await this.embedTexts([query], signal), 0, 'reconcile query embedding')
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason ?? error
-      semanticUnavailable = true
+  ): Promise<ReconcileSourceInput[]> {
+    const candidateNow = new Date().toISOString()
+    const pools = extracted.map(source => ({
+      source,
+      candidates: records.filter(record => record.status === 'active'
+        && record.visibility === 'recallable'
+        && record.layer === source.layer
+        && (record.layer === 'l2_fact' || record.layer === 'l4_identity')
+        && validAt(record, candidateNow)),
+    }))
+    const eligible = pools
+      .map((pool, index) => ({ ...pool, index }))
+      .filter(pool => pool.candidates.length > 0)
+    const queryVectors: Array<readonly number[] | undefined> = Array.from(
+      { length: pools.length },
+      () => undefined,
+    )
+    if (this.portableHashImplementation) {
+      for (const pool of eligible) queryVectors[pool.index] = hashEmbedding(pool.source.content)
+    } else {
+      const vectors = await this.embedReconcileQueries(eligible.map(pool => pool.source.content), signal)
+      for (const [eligibleIndex, pool] of eligible.entries()) {
+        queryVectors[pool.index] = vectors[eligibleIndex]
+      }
     }
-    let ranked: MemoryHit[]
-    try {
-      ranked = this.rank(
-        query,
-        queryVector,
-        classifyIntent(query),
-        candidates,
-        false,
-        records,
-        true,
-      )
-    } catch (error) {
-      if (!isTokenizationFailure(error)) throw error
-      const semanticUsable = !semanticUnavailable
-        && queryVector !== undefined
-        && hasNonZeroVector(queryVector)
-        && candidates.some(record => hasNonZeroVector(record.embedding.vector))
-      if (!semanticUsable) throw tokenizationFailure()
-      ranked = this.rank(
-        query,
-        queryVector,
-        classifyIntent(query),
-        candidates,
-        false,
-        records,
-        false,
-      )
-    }
-    return ranked.slice(0, this.config.reconcileCandidateLimit).map(hit => hit.memory)
+    return pools.map((pool, index): ReconcileSourceInput => {
+      if (pool.candidates.length === 0) return { source: pool.source, shortlist: [] }
+      const query = pool.source.content
+      const queryVector = queryVectors[index]
+      let ranked: MemoryHit[]
+      try {
+        ranked = this.rank(
+          query,
+          queryVector,
+          classifyIntent(query),
+          pool.candidates,
+          false,
+          records,
+          true,
+          true,
+        )
+      } catch (error) {
+        if (!isTokenizationFailure(error)) throw error
+        const semanticUsable = queryVector !== undefined
+          && hasNonZeroVector(queryVector)
+          && pool.candidates.some(record => hasNonZeroVector(record.embedding.vector))
+        if (!semanticUsable) throw tokenizationFailure()
+        ranked = this.rank(
+          query,
+          queryVector,
+          classifyIntent(query),
+          pool.candidates,
+          false,
+          records,
+          false,
+          true,
+        )
+      }
+      return {
+        source: pool.source,
+        shortlist: ranked
+          .slice(0, this.config.reconcileCandidateLimit)
+          .map(hit => hit.memory),
+      }
+    })
   }
 
   private applyExtraction(
     existing: readonly MemoryRecord[],
     raw: MemoryRecord,
     extraction: ExtractionResult,
-    extracted: readonly ExtractedMemory[],
-    candidates: readonly MemoryRecord[],
+    candidateInputs: readonly ReconcileSourceInput[],
     operations: readonly ReconcileOperation[],
     now: string,
   ): MemoryRecord[] {
-    validatePlan(extracted, candidates, operations)
+    validatePlan(candidateInputs, operations)
     const records = [...existing]
     const created: MemoryRecord[] = []
+    const extracted = candidateInputs.map(input => input.source)
     const byRef = new Map(extracted.map(item => [item.clientRef, item]))
     for (const operation of operations) {
       if (operation.type === 'NOOP') {
@@ -1151,6 +1191,7 @@ export class MemoryService extends Service implements MemoryCapability {
     includeEvolution: boolean,
     allRecords: readonly MemoryRecord[],
     lexicalEnabled: boolean,
+    lexicalSemanticTieBreak = false,
   ): MemoryHit[] {
     if (records.length === 0) return []
     const semantic = queryVector === undefined
@@ -1162,9 +1203,18 @@ export class MemoryService extends Service implements MemoryCapability {
         .sort((left, right) => right.score - left.score)
     const lexical = lexicalEnabled
       ? (() => {
+        const documents = records.map((record) => {
+          const normalizedTags = record.tags.map(tag => tag.trim().toLowerCase()).join(' ')
+          return {
+            search: `${record.content}\n${normalizedTags}`,
+            reconciliation: normalizedTags.length === 0
+              ? record.content
+              : `${record.content}\n${normalizedTags}`,
+          }
+        })
         const lexicalScores = bm25(
           this.lexicalTokenizer.tokenize(query),
-          records.map(record => `${record.content}\n${record.tags.map(tag => tag.trim().toLowerCase()).join(' ')}`),
+          documents.map(document => lexicalSemanticTieBreak ? document.reconciliation : document.search),
           this.config.bm25K1,
           this.config.bm25B,
           this.lexicalTokenizer,
@@ -1174,6 +1224,12 @@ export class MemoryService extends Service implements MemoryCapability {
           .sort((left, right) => right.score - left.score)
       })()
       : []
+    if (lexicalSemanticTieBreak && lexical.length > 0 && semantic.length > 1) {
+      const lexicalRanks = new Map(lexical.map((entry, index) => [entry.record.id, index]))
+      semantic.sort((left, right) => right.score - left.score
+        || (lexicalRanks.get(left.record.id) ?? Number.MAX_SAFE_INTEGER)
+          - (lexicalRanks.get(right.record.id) ?? Number.MAX_SAFE_INTEGER))
+    }
     const weights = intent === 'navigational'
       ? { semantic: 0.4, lexical: 1.4 }
       : intent === 'conceptual'
@@ -1265,6 +1321,47 @@ export class MemoryService extends Service implements MemoryCapability {
         },
       }
     })
+  }
+
+  private async embedReconcileQueries(
+    texts: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<readonly (readonly number[] | undefined)[]> {
+    const vectors: Array<readonly number[] | undefined> = Array.from(
+      { length: texts.length },
+      () => undefined,
+    )
+    for (let offset = 0; offset < texts.length; offset += this.embeddingDescription.maxBatchSize) {
+      throwIfAborted(signal)
+      const batch = texts.slice(offset, offset + this.embeddingDescription.maxBatchSize)
+      try {
+        const result = await this.embeddingProvider.embedBatch(batch, signal)
+        throwIfAborted(signal)
+        if (!Array.isArray(result) || result.length !== batch.length) continue
+        const normalized: number[][] = []
+        let valid = true
+        for (const vector of result) {
+          if (!Array.isArray(vector) || vector.length !== this.embeddingDescription.dimensions
+            || vector.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
+            valid = false
+            break
+          }
+          const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
+          if (!Number.isFinite(norm) || norm === 0) {
+            valid = false
+            break
+          }
+          normalized.push(vector.map(value => value / norm))
+        }
+        if (!valid || normalized.length !== batch.length) continue
+        for (const [batchIndex, vector] of normalized.entries()) {
+          vectors[offset + batchIndex] = vector
+        }
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error
+      }
+    }
+    return vectors
   }
 
   private async embedTexts(texts: readonly string[], signal?: AbortSignal): Promise<readonly (readonly number[])[]> {
@@ -1374,12 +1471,11 @@ export class MemoryService extends Service implements MemoryCapability {
 }
 
 function validatePlan(
-  extracted: readonly ExtractedMemory[],
-  candidates: readonly MemoryRecord[],
+  inputs: readonly ReconcileSourceInput[],
   operations: readonly ReconcileOperation[],
 ): void {
-  const refs = new Map(extracted.map(item => [item.clientRef, item]))
-  const ids = new Map(candidates.map(candidate => [candidate.id, candidate]))
+  const refs = new Map(inputs.map(input => [input.source.clientRef, input]))
+  const ids = new Map(stableCandidateCatalog(inputs).map(candidate => [candidate.id, candidate]))
   const covered = new Set<string>()
   for (const operation of operations) {
     const sourceRefs = operation.type === 'CONSOLIDATE' ? operation.sourceRefs : [operation.sourceRef]
@@ -1389,15 +1485,53 @@ function validatePlan(
     }
     if (operation.type === 'ADD') continue
     const targetIds = operation.type === 'NOOP' ? [operation.duplicateOf] : operation.targetIds
+    const authorized = operation.type === 'CONSOLIDATE'
+      ? new Set(sourceRefs.flatMap(ref => requiredMapValue(refs, ref, 'reconcile source').shortlist.map(candidate => candidate.id)))
+      : new Set(requiredMapValue(refs, requiredArrayValue(sourceRefs, 0, 'reconcile source ref'), 'reconcile source')
+        .shortlist.map(candidate => candidate.id))
+    if (operation.type === 'CONSOLIDATE') {
+      const layers = new Set(sourceRefs.map(ref => requiredMapValue(refs, ref, 'reconcile source').source.layer))
+      if (layers.size !== 1) throw new MemoryError('RECONCILE_FAILED', 'consolidation crosses memory layers')
+    }
     for (const targetId of targetIds) {
       const target = ids.get(targetId as MemoryId)
-      if (target === undefined) throw new MemoryError('RECONCILE_FAILED', `unknown reconcile target '${targetId}'`)
-      if (sourceRefs.some(ref => requiredMapValue(refs, ref, 'extracted source').layer !== target.layer)) {
+      if (target === undefined || !authorized.has(target.id)) {
+        throw new MemoryError('RECONCILE_FAILED', `unknown reconcile target '${targetId}'`)
+      }
+      if (sourceRefs.some(ref => requiredMapValue(refs, ref, 'reconcile source').source.layer !== target.layer)) {
         throw new MemoryError('RECONCILE_FAILED', `reconcile target '${targetId}' crosses memory layers`)
       }
     }
   }
   if (covered.size !== refs.size) throw new MemoryError('RECONCILE_FAILED', 'reconcile plan did not cover every extracted memory')
+}
+
+function stableCandidateCatalog(inputs: readonly ReconcileSourceInput[]): MemoryRecord[] {
+  const seen = new Set<MemoryId>()
+  const candidates: MemoryRecord[] = []
+  for (const input of inputs) {
+    for (const candidate of input.shortlist) {
+      if (seen.has(candidate.id)) continue
+      seen.add(candidate.id)
+      candidates.push(candidate)
+    }
+  }
+  return candidates
+}
+
+function orderOperations(
+  operations: readonly ReconcileOperation[],
+  extracted: readonly ExtractedMemory[],
+): ReconcileOperation[] {
+  const indexes = new Map(extracted.map((source, index) => [source.clientRef, index]))
+  return operations
+    .map((operation, stableIndex) => {
+      const refs = operation.type === 'CONSOLIDATE' ? operation.sourceRefs : [operation.sourceRef]
+      const sourceIndex = Math.min(...refs.map(ref => indexes.get(ref) ?? Number.MAX_SAFE_INTEGER))
+      return { operation, sourceIndex, stableIndex }
+    })
+    .sort((left, right) => left.sourceIndex - right.sourceIndex || left.stableIndex - right.stableIndex)
+    .map(item => item.operation)
 }
 
 function validateState(state: MemoryScopeState, description: EmbeddingDescription): void {

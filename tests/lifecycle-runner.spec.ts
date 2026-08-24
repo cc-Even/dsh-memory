@@ -316,6 +316,34 @@ afterAll(async () => {
 })
 
 describe('MEM-003B programmatic lifecycle runner', () => {
+  it('pins MEM-103 setup candidates for deterministic ADD scripts and reconciliation fault injection', async () => {
+    const dataset = await readDataset()
+    expect(dataset).toMatchObject({
+      datasetVersion: '1.1.0',
+      referenceCommit: '6b55f9e7afe27680ae32ba44cec183ce4e3e3f11',
+    })
+    const required = new Map<string, 'l2_fact' | 'l4_identity'>([
+      ['op-zh-add-tn', 'l2_fact'],
+      ['op-en-add-tn', 'l4_identity'],
+      ['fault-en-model-reconciliation', 'l4_identity'],
+      ['fault-en-invalid-json-reconciliation', 'l4_identity'],
+      ['fault-en-schema-reconciliation', 'l4_identity'],
+    ])
+    for (const [id, layer] of required) {
+      const item = dataset.cases.find(candidate => candidate.id === id)
+      expect.soft(item?.setup, `${id} setup`).toEqual([
+        expect.objectContaining({ alias: 'candidate', layer }),
+      ])
+    }
+    for (const id of [
+      'fault-zh-model-extraction',
+      'fault-zh-invalid-json-extraction',
+      'fault-zh-schema-extraction',
+    ]) {
+      expect.soft(dataset.cases.find(candidate => candidate.id === id)?.setup, `${id} setup`).toEqual([])
+    }
+  })
+
   it('runs all 20 cases through the real pipeline and reports the frozen conformance matrix', async () => {
     const [{ runLifecycle }, { validateLifecycleReport }] = await Promise.all([loadRunner(), loadMetrics()])
     const report = await runLifecycle({ datasetPath, repeats: 2 })
@@ -325,8 +353,8 @@ describe('MEM-003B programmatic lifecycle runner', () => {
       schemaVersion: 1,
       dataset: {
         id: 'dsh-memory-lifecycle-scripted',
-        version: '1.0.0',
-        referenceCommit: 'f32fbd7846ddf5c5130c5bb696c695b56b9d70a8',
+        version: '1.1.0',
+        referenceCommit: '6b55f9e7afe27680ae32ba44cec183ce4e3e3f11',
       },
       runner: { version: 1, repeats: 2 },
       provenance: {

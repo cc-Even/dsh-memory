@@ -25,7 +25,7 @@ Session 压缩与跨会话记忆服务于不同的保留需求。压缩保留精
 
 ### Raw-first 增强与演进
 
-每次新增先提交可召回的 L1 原始记录及 `accepted` 作业。直接模式随后创建一条 L2 事实或 L4 身份信息。抽取模式把不可信对话 JSON 发送给配置模型，只接受完全符合 schema 的严格 JSON 对象，预过滤同一所有者的调和候选，并要求计划恰好覆盖每个抽取来源一次。在训练型远端 embedding 空间中，首次 raw 提交携带同空间、同维度的零向量占位，保证易失败的网络调用不会先于持久证据。成功提交会用经过校验及 L2 归一化的向量替换占位；embedding 失败会降级作业、不创建派生记录，并保留可通过词法通道召回的 L1。
+每次新增先提交可召回的 L1 原始记录及 `accepted` 作业。直接模式随后创建一条 L2 事实或 L4 身份信息。抽取模式把不可信对话 JSON 发送给配置模型，只接受完全符合 schema 的严格 JSON 对象。每个 sanitized source 独立排序 owner row 中 active、recallable、当前有效且同层的记录；Session 不是调和边界。空 shortlist 确定性生成 `ADD`，模型只看到非空来源并必须恰好覆盖每个可见来源一次。在训练型远端 embedding 空间中，首次 raw 提交携带同空间、同维度的零向量占位，保证易失败的网络调用不会先于持久证据。成功提交会用经过校验及 L2 归一化的向量替换占位；embedding 失败会降级作业、不创建派生记录，并保留可通过词法通道召回的 L1。
 
 `ADD` 创建新链头；`NOOP` 把新的原始记录附加为现有记录的额外证据；`CONSOLIDATE` 创建合并链头并取代目标；`SUPERSEDE` 创建新修订并保留反向链接。成功处理后原始证据变为 `source_only`；模型或解析失败会把作业标为 `degraded` 并保持原始 L1 可召回。重启会把中断的 `accepted` 作业改为 `degraded`，不会猜测增强已经完成。
 
@@ -35,11 +35,11 @@ Session 压缩与跨会话记忆服务于不同的保留需求。压缩保留精
 
 读取在任何 provider 调用或排名前按所有者、状态、可见性、有效期、请求层与可选 Session 预过滤。画像与普通通道有独立配额。`EmbeddingProvider` 提供不含秘密的不可变 descriptor 及批量嵌入操作；核心负责按上限顺序分批、校验数量/维度/有限非零数值、保持顺序及最终 L2 归一化。默认 `HashEmbeddingProvider` 逐字节保持带版本的 256 维 token/字符哈希向量。训练型参考适配器调用 OpenAI 兼容端点，具有有界的单次超时、重试和退避；Loader 配置中的凭据来自命名环境变量，不会进入 descriptor 或公开配置。
 
-语义向量、BM25 与倒数排名融合仍是独立通道。训练型 provider 搜索故障只关闭语义通道，以 `semantic:provider-unavailable` 诊断返回词法结果，且绝不会把调用方取消转换为降级成功。调和候选检索遵循相同规则；最终派生记录的 embedding 失败仍按 raw-first 语义降级整个增强。便携哈希搜索继续报告 `semantic:portable-hash`。
+语义向量、BM25 与倒数排名融合仍是独立通道。训练型 provider 搜索故障只关闭语义通道，以 `semantic:provider-unavailable` 诊断返回词法结果，且绝不会把调用方取消转换为降级成功。调和来源 query 按 provider descriptor 上限保持顺序分批；非取消故障、非法输出或零向量只关闭该批来源的语义排序，不阻止后续批次，tokenizer 故障则按来源隔离。每个来源可通过任一剩余通道继续；若任一非空候选池同时失去两条通道，整个 accepted job 降级且不提交部分派生记录。最终派生记录的 embedding 失败仍按 raw-first 语义降级整个增强。便携哈希搜索继续报告 `semantic:portable-hash`。
 
 BM25 使用公共 `LexicalTokenizer` 接缝。默认 `CjkBigramTokenizer` 保留 ASCII 字母数字 run，并为连续 Basic Han 生成重叠 bigram；`legacy` 恢复之前的整段中文策略，作为不改存储的回滚开关。便携哈希空间由独立的私有 legacy token 路径隔离，因此词法策略变化不会修改其版本化向量。画像/普通排序、训练型 provider 的词法 fallback、降级零占位 raw 召回及调和候选共用同一个已解析 tokenizer。Query 长度，以及所有者、状态、可见性、有效期、层和 Session 过滤都先于 tokenizer/provider；候选为空时两者都会短路。
 
-受信任的程序化 tokenizer 只能看到 query，以及预过滤候选的内容和规范化标签。空输入 preflight、实际数组校验、100,000 token 与 256 UTF-16 code unit 上限、立即复制和固定 `TOKENIZATION_FAILED` 错误会限制普通故障，且不保留上游 cause。搜索只关闭词法排序并发出 `lexical:tokenizer-unavailable`；若语义也失败，则返回空通道及两项诊断。调和可只使用词法通道；只使用语义回退时，还要求 query 向量与至少一条候选向量均为非零。缺少该信号会降级 accepted job 并保留可召回 L1。调用方取消保持为取消。由于该扩展同步执行，永不返回的可信实现无法在此调用边界被抢占。
+受信任的程序化 tokenizer 只能看到 query，以及预过滤候选的内容和规范化标签。空输入 preflight、实际数组校验、100,000 token 与 256 UTF-16 code unit 上限、立即复制和固定 `TOKENIZATION_FAILED` 错误会限制普通故障，且不保留上游 cause。搜索只关闭词法排序并发出 `lexical:tokenizer-unavailable`；若语义也失败，则返回空通道及两项诊断。调和可只使用词法通道；只使用语义回退时，还要求 query 向量与至少一条候选向量均为非零。缺少该信号会降级 accepted job 并保留可召回 L1。调和 prompt 按抽取顺序列出来源及各自排序后的 candidate ID，并附上按首次出现稳定去重的候选目录。`NOOP` 与 `SUPERSEDE` 只能使用本来源 shortlist；`CONSOLIDATE` 只能使用参与调和且同层的来源 shortlist 并集。自动 `ADD` 来源及所有 owner、Session、向量、meta、visibility、无效状态和跨层内容对模型不可见。调用方取消保持为取消。由于该扩展同步执行，永不返回的可信实现无法在此调用边界被抢占。
 
 只有所有记录都匹配活动 descriptor 的 `spaceId` 与维度时，owner 状态才有效。导入、冷启动和混合批次会原子拒绝不匹配。Provider、模型、维度、归一化或算法变化都必须使用部署者固定的新空间 ID。MEM-101 明确不改写 canonical 记录；重嵌入与迁移属于 MEM-104。
 

@@ -45,6 +45,12 @@ export interface ExtractedMemory {
   readonly evidenceTurnIndexes: readonly number[]
 }
 
+/** One sanitized source and the independently ranked targets it may reference. */
+export interface ReconcileSourceInput {
+  readonly source: ExtractedMemory
+  readonly shortlist: readonly MemoryRecord[]
+}
+
 const operationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ADD'), sourceRef: z.string().min(1) }),
   z.object({ type: z.literal('NOOP'), sourceRef: z.string().min(1), duplicateOf: z.string().min(1) }),
@@ -113,29 +119,44 @@ export async function extractMemories(
  * Reconcile extracted memories against an already scope-filtered shortlist.
  * @param ctx - Context carrying the Harness LLM service.
  * @param route - Provider, model, and output-token route.
- * @param extracted - Sanitized new facts and identities.
- * @param candidates - Same-owner candidate records eligible as targets.
+ * @param inputs - Sanitized sources paired with their authorized target shortlists.
  * @param signal - Optional cancellation signal for model work.
  * @returns a schema-validated operation plan.
  */
 export async function reconcileMemories(
   ctx: Context,
   route: ModelRoute,
-  extracted: readonly ExtractedMemory[],
-  candidates: readonly MemoryRecord[],
+  inputs: readonly ReconcileSourceInput[],
   signal?: AbortSignal,
 ): Promise<readonly ReconcileOperation[]> {
+  const candidates = stableCandidateCatalog(inputs)
   const prompt = [
     'Return exactly {"operations":[...]} and cover every source clientRef exactly once.',
     'ADD is new information. NOOP is an exact duplicate. CONSOLIDATE merges compatible information into one complete text. SUPERSEDE replaces facts that cannot both be current.',
-    'Never delete. targetIds may name only candidate ids. Keep layers separate.',
+    'Never delete. Each operation may name only candidate ids authorized for its source; CONSOLIDATE may use the union for its participating sources. Keep layers separate.',
     '',
-    `NEW=${JSON.stringify(extracted)}`,
+    `SOURCES=${JSON.stringify(inputs.map(input => ({
+      source: input.source,
+      candidateIds: input.shortlist.map(candidate => candidate.id),
+    })))}`,
     `CANDIDATES=${JSON.stringify(candidates.map(candidate => ({ id: candidate.id, layer: candidate.layer, content: candidate.content, tags: candidate.tags, revision: candidate.revision })))}`,
   ].join('\n')
   return reconciliationSchema.parse(
     await structuredCall(ctx, route, RECONCILIATION_SYSTEM, prompt, signal),
   ).operations
+}
+
+function stableCandidateCatalog(inputs: readonly ReconcileSourceInput[]): MemoryRecord[] {
+  const seen = new Set<string>()
+  const candidates: MemoryRecord[] = []
+  for (const input of inputs) {
+    for (const candidate of input.shortlist) {
+      if (seen.has(candidate.id)) continue
+      seen.add(candidate.id)
+      candidates.push(candidate)
+    }
+  }
+  return candidates
 }
 
 async function structuredCall(

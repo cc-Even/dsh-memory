@@ -72,6 +72,8 @@ interface SetupOptions {
   readonly root?: string
   readonly embeddingProvider?: ScriptedEmbeddingProvider
   readonly embedding?: unknown
+  readonly lexicalTokenizer?: { tokenize(text: string): readonly string[] }
+  readonly reconcileCandidateLimit?: number
 }
 
 interface DurableScopeStateSnapshot {
@@ -143,6 +145,8 @@ async function setup(options: SetupOptions = {}): Promise<Context> {
     autoRecall: false,
     ...(options.embeddingProvider === undefined ? {} : { embeddingProvider: options.embeddingProvider }),
     ...(options.embedding === undefined ? {} : { embedding: options.embedding }),
+    ...(options.lexicalTokenizer === undefined ? {} : { lexicalTokenizer: options.lexicalTokenizer }),
+    ...(options.reconcileCandidateLimit === undefined ? {} : { reconcileCandidateLimit: options.reconcileCandidateLimit }),
   } as never)
   return ctx
 }
@@ -505,7 +509,6 @@ describe('MEM-101 core batching and vector validation', () => {
         })),
         identities: [],
       }),
-      JSON.stringify({ operations: facts.map((_content, index) => ({ type: 'ADD', sourceRef: `fact-${index + 1}` })) }),
     ])
     ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
 
@@ -550,7 +553,6 @@ describe('MEM-101 core batching and vector validation', () => {
         })),
         identities: [],
       }),
-      JSON.stringify({ operations: facts.map((_content, index) => ({ type: 'ADD', sourceRef: `invalid-batch-${index + 1}` })) }),
     ])
     ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
 
@@ -1199,5 +1201,359 @@ describe('MEM-101 embedding space isolation', () => {
     }))
     expect(failure, 'non-empty hash store accepted a trained space').toBeDefined()
     expect(failure).toMatchObject({ code: 'EMBEDDING_SPACE_MISMATCH' })
+  })
+})
+
+describe('MEM-103 reconciliation embedding batches and atomic failures', () => {
+  it('embeds source contents in bounded ordered batches and maps every result back across batches', async () => {
+    const sourceTexts = [
+      'alpha-source semantic query',
+      'beta-source semantic query',
+      'gamma-source semantic query',
+    ] as const
+    const vectors = new Map<string, readonly number[]>([
+      [sourceTexts[0], [1, 0, 0]],
+      [sourceTexts[1], [0, 1, 0]],
+      [sourceTexts[2], [0, 0, 1]],
+    ])
+    const provider = new ScriptedEmbeddingProvider(
+      trainedDescription({ maxBatchSize: 2 }),
+      async texts => texts.map(text => vectors.get(text) ?? [3, 4, 0]),
+    )
+    const ctx = await setup({ embeddingProvider: provider, reconcileCandidateLimit: 1 })
+    const owner = scope('per-source-batches')
+    const candidates = sourceTexts.map((content, index) => importedRecord({
+      id: `per-source-candidate-${index}`,
+      owner,
+      content,
+      spaceId: provider.describe().spaceId,
+      dimensions: provider.describe().dimensions,
+      vector: vectors.get(content) ?? [3, 4, 0],
+    }))
+    await ctx.memory.import(owner, candidates)
+    const raw = 'evidence with three independently reconciled sources'
+    const adapter = new JsonAdapter([
+      JSON.stringify({
+        basicProfilePatch: {},
+        facts: sourceTexts.map((content, index) => ({
+          clientRef: `source-${index}`,
+          content,
+          layer: 'l2_fact',
+          tags: [],
+          confidence: 0.9,
+          evidenceTurnIndexes: [index + 1],
+        })),
+        identities: [],
+      }),
+      JSON.stringify({ operations: candidates.map((candidate, index) => ({
+        type: 'NOOP',
+        sourceRef: `source-${index}`,
+        duplicateOf: candidate.id,
+      })) }),
+    ])
+    ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
+
+    const receipt = await ctx.memory.add({
+      scope: owner,
+      content: raw,
+      mode: 'extract',
+      idempotencyKey: 'per-source-batches',
+    })
+
+    expect(receipt).toMatchObject({ status: 'completed', createdMemoryIds: [] })
+    expect(provider.calls.map(call => call.texts)).toEqual([
+      [sourceTexts[0], sourceTexts[1]],
+      [sourceTexts[2]],
+      [raw],
+    ])
+    expect(adapter.calls).toHaveLength(2)
+    for (const candidate of candidates) {
+      expect(ctx.memory.get(candidate.id, owner)?.sourceMemoryIds).toHaveLength(1)
+    }
+  })
+
+  it.each(['throw', 'zero-vector'] as const)(
+    'continues later source batches after a %s provider batch failure when lexical remains available',
+    async failureMode => {
+    const sourceTexts = ['failed semantic alpha', 'working semantic beta', 'working semantic gamma'] as const
+    const secret = `provider-batch-${failureMode}-secret`
+    const provider = new ScriptedEmbeddingProvider(
+      trainedDescription({ maxBatchSize: 1 }),
+      async texts => {
+        if (texts[0] === sourceTexts[0]) {
+          if (failureMode === 'throw') throw new Error(secret)
+          return [[0, 0, 0]]
+        }
+        return texts.map(() => [3, 4, 0])
+      },
+    )
+    const tokenizer = {
+      tokenize: (text: string) => text === '' ? [] : text.toLowerCase().split(/\s+/u),
+    }
+    const ctx = await setup({
+      embeddingProvider: provider,
+      lexicalTokenizer: tokenizer,
+      reconcileCandidateLimit: 1,
+    })
+    const owner = scope('batch-fallback')
+    const candidates = sourceTexts.map((content, index) => importedRecord({
+      id: `batch-fallback-candidate-${index}`,
+      owner,
+      content,
+      spaceId: provider.describe().spaceId,
+      dimensions: provider.describe().dimensions,
+      vector: [3, 4, 0],
+    }))
+    await ctx.memory.import(owner, candidates)
+    const raw = 'batch fallback evidence'
+    const adapter = new JsonAdapter([
+      JSON.stringify({
+        basicProfilePatch: {},
+        facts: sourceTexts.map((content, index) => ({
+          clientRef: `fallback-source-${index}`,
+          content,
+          layer: 'l2_fact',
+          tags: [],
+          confidence: 0.9,
+          evidenceTurnIndexes: [index + 1],
+        })),
+        identities: [],
+      }),
+      JSON.stringify({ operations: candidates.map((candidate, index) => ({
+        type: 'NOOP',
+        sourceRef: `fallback-source-${index}`,
+        duplicateOf: candidate.id,
+      })) }),
+    ])
+    ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
+
+    const receipt = await ctx.memory.add({ scope: owner, content: raw, mode: 'extract', idempotencyKey: 'batch-fallback' })
+
+    expect(receipt.status).toBe('completed')
+    expect(provider.calls.map(call => call.texts)).toEqual([
+      [sourceTexts[0]],
+      [sourceTexts[1]],
+      [sourceTexts[2]],
+      [raw],
+    ])
+    expect(adapter.calls).toHaveLength(2)
+    expect(diagnosticObjectGraph({
+      receipt,
+      records: ctx.memory.export(owner),
+      health: ctx.memory.health(),
+      logger: (ctx.logger as unknown as { readonly buffer?: unknown }).buffer,
+    }))
+      .not.toContain(secret)
+  })
+
+  it('completes complementary per-source channel fallbacks in one reconciliation call', async () => {
+    const sourceQueries = ['source a semantic query', 'source b stable lexical overlap'] as const
+    const candidateContents = ['source a semantic candidate', 'source b stable lexical overlap candidate'] as const
+    const seen: string[] = []
+    const provider = new ScriptedEmbeddingProvider(
+      trainedDescription({ maxBatchSize: 1 }),
+      async texts => {
+        if (texts[0] === sourceQueries[1]) throw new Error('source-b-semantic-secret')
+        return texts.map(text => text === sourceQueries[0] ? [1, 0, 0] : [3, 4, 0])
+      },
+    )
+    const tokenizer = {
+      tokenize: (text: string) => {
+        if (text === '') return []
+        seen.push(text)
+        if (text === sourceQueries[0]) throw new Error('single source tokenizer failure')
+        return text.toLowerCase().split(/\s+/u)
+      },
+    }
+    const ctx = await setup({ embeddingProvider: provider, lexicalTokenizer: tokenizer, reconcileCandidateLimit: 1 })
+    const owner = scope('tokenizer-semantic-fallback')
+    const candidates = candidateContents.map((content, index) => importedRecord({
+      id: `tokenizer-semantic-candidate-${index}`,
+      owner,
+      content,
+      spaceId: provider.describe().spaceId,
+      dimensions: provider.describe().dimensions,
+      vector: index === 0 ? [1, 0, 0] : [0, 1, 0],
+    }))
+    await ctx.memory.import(owner, candidates)
+    const adapter = new JsonAdapter([
+      JSON.stringify({
+        basicProfilePatch: {},
+        facts: sourceQueries.map((content, index) => ({
+          clientRef: `tokenizer-source-${index}`,
+          content,
+          layer: 'l2_fact',
+          tags: [],
+          confidence: 0.9,
+          evidenceTurnIndexes: [index + 1],
+        })),
+        identities: [],
+      }),
+      JSON.stringify({ operations: candidates.map((candidate, index) => ({
+        type: 'NOOP',
+        sourceRef: `tokenizer-source-${index}`,
+        duplicateOf: candidate.id,
+      })) }),
+    ])
+    ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
+
+    const receipt = await ctx.memory.add({
+      scope: owner,
+      content: 'tokenizer semantic fallback evidence',
+      mode: 'extract',
+      idempotencyKey: 'tokenizer-semantic-fallback',
+    })
+
+    expect(receipt.status).toBe('completed')
+    expect(provider.calls.map(call => call.texts)).toEqual([
+      [sourceQueries[0]],
+      [sourceQueries[1]],
+      ['tokenizer semantic fallback evidence'],
+    ])
+    expect(seen).toContain(sourceQueries[0])
+    expect(seen).toContain(sourceQueries[1])
+    expect(seen).toContain(candidateContents[1])
+    expect(seen.filter(text => text === sourceQueries[0])).toHaveLength(1)
+    expect(adapter.calls).toHaveLength(2)
+    expect(JSON.stringify({ receipt, records: ctx.memory.export(owner) })).not.toContain('source-b-semantic-secret')
+  })
+
+  it('degrades the whole job without a model plan when one source loses both channels', async () => {
+    const sourceTexts = ['healthy first source', 'double unavailable source'] as const
+    const providerSecret = 'provider-double-channel-secret'
+    const tokenizerSecret = 'tokenizer-double-channel-secret'
+    const provider = new ScriptedEmbeddingProvider(
+      trainedDescription({ maxBatchSize: 1 }),
+      async texts => {
+        if (texts[0] === sourceTexts[1]) throw new Error(providerSecret)
+        return texts.map(() => [3, 4, 0])
+      },
+    )
+    const tokenizer = {
+      tokenize: (text: string) => {
+        if (text === '') return []
+        if (text.includes(sourceTexts[1])) throw new Error(tokenizerSecret)
+        return text.toLowerCase().split(/\s+/u)
+      },
+    }
+    const ctx = await setup({ embeddingProvider: provider, lexicalTokenizer: tokenizer, reconcileCandidateLimit: 1 })
+    const owner = scope('double-channel-source')
+    const candidates = sourceTexts.map((content, index) => importedRecord({
+      id: `double-channel-candidate-${index}`,
+      owner,
+      content,
+      spaceId: provider.describe().spaceId,
+      dimensions: provider.describe().dimensions,
+      vector: [3, 4, 0],
+    }))
+    await ctx.memory.import(owner, candidates)
+    const adapter = new JsonAdapter([JSON.stringify({
+      basicProfilePatch: {},
+      facts: sourceTexts.map((content, index) => ({
+        clientRef: `double-source-${index}`,
+        content,
+        layer: 'l2_fact',
+        tags: [],
+        confidence: 0.9,
+        evidenceTurnIndexes: [index + 1],
+      })),
+      identities: [],
+    })])
+    ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
+
+    const receipt = await ctx.memory.add({
+      scope: owner,
+      content: 'double channel failure evidence',
+      mode: 'extract',
+      idempotencyKey: 'double-channel-source',
+    })
+
+    expect(receipt).toMatchObject({
+      status: 'degraded',
+      createdMemoryIds: [],
+      warnings: ['lexical tokenizer failed'],
+    })
+    expect(adapter.calls).toHaveLength(1)
+    expect(provider.calls.map(call => call.texts)).toEqual([[sourceTexts[0]], [sourceTexts[1]]])
+    expect(ctx.memory.export(owner)).toEqual([
+      ...candidates,
+      expect.objectContaining({
+        id: receipt.rawMemoryId,
+        layer: 'l1_raw',
+        status: 'active',
+        visibility: 'recallable',
+        embedding: expect.objectContaining({ vector: [0, 0, 0] }),
+      }),
+    ])
+    expect(JSON.stringify({ receipt, records: ctx.memory.export(owner) }))
+      .not.toMatch(/provider-double-channel-secret|tokenizer-double-channel-secret/u)
+  })
+
+  it('propagates caller abort from the first source batch and never starts later batches or reconciliation', async () => {
+    const sourceTexts = ['abort first source', 'must not start second source'] as const
+    let startedResolve: (() => void) | undefined
+    const started = new Promise<void>((resolve) => { startedResolve = resolve })
+    const provider = new ScriptedEmbeddingProvider(
+      trainedDescription({ maxBatchSize: 1 }),
+      async (texts, signal) => {
+        startedResolve?.()
+        return await new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+      },
+    )
+    const ctx = await setup({ embeddingProvider: provider, reconcileCandidateLimit: 1 })
+    const owner = scope('per-source-abort')
+    const candidates = sourceTexts.map((content, index) => importedRecord({
+      id: `abort-candidate-${index}`,
+      owner,
+      content,
+      spaceId: provider.describe().spaceId,
+      dimensions: provider.describe().dimensions,
+      vector: [3, 4, 0],
+    }))
+    await ctx.memory.import(owner, candidates)
+    const adapter = new JsonAdapter([JSON.stringify({
+      basicProfilePatch: {},
+      facts: sourceTexts.map((content, index) => ({
+        clientRef: `abort-source-${index}`,
+        content,
+        layer: 'l2_fact',
+        tags: [],
+        confidence: 0.9,
+        evidenceTurnIndexes: [index + 1],
+      })),
+      identities: [],
+    })])
+    ctx.llm.registerAdapter(['embedding-test-llm'], adapter)
+    const controller = new AbortController()
+    const reason = new Error('MEM-103 caller abort sentinel')
+    const input = {
+      scope: owner,
+      content: 'caller abort raw evidence',
+      mode: 'extract' as const,
+      idempotencyKey: 'per-source-abort',
+    }
+    const pending = ctx.memory.add(input, controller.signal)
+    await started
+    controller.abort(reason)
+
+    const failure = await captureFailure(() => pending)
+
+    expect(failure).toBe(reason)
+    expect(provider.calls.map(call => call.texts)).toEqual([[sourceTexts[0]]])
+    expect(adapter.calls).toHaveLength(1)
+    const durable = await ctx.memory.add(input)
+    expect(durable).toMatchObject({
+      status: 'degraded',
+      createdMemoryIds: [],
+      warnings: ['memory enrichment aborted'],
+    })
+    expect(adapter.calls).toHaveLength(1)
+    const exported = ctx.memory.export(owner)
+    expect(exported).toEqual([
+      ...candidates,
+      expect.objectContaining({ layer: 'l1_raw', status: 'active', visibility: 'recallable' }),
+    ])
   })
 })

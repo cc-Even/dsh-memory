@@ -181,7 +181,6 @@ describe('memory service', () => {
         }],
         identities: [],
       }),
-      JSON.stringify({ operations: [{ type: 'ADD', sourceRef: 'fact-1' }] }),
     ])
     ctx.llm.registerAdapter(['missing-test-provider'], adapter)
     const first = await ctx.memory.add({

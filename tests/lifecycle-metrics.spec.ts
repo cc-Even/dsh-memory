@@ -291,8 +291,8 @@ describe('MEM-003B lifecycle schemas and frozen dataset', () => {
     expect(dataset).toMatchObject({
       schemaVersion: 1,
       datasetId: 'dsh-memory-lifecycle-scripted',
-      datasetVersion: '1.0.0',
-      referenceCommit: 'f32fbd7846ddf5c5130c5bb696c695b56b9d70a8',
+      datasetVersion: '1.1.0',
+      referenceCommit: '6b55f9e7afe27680ae32ba44cec183ce4e3e3f11',
       provenance: {
         mode: 'scripted',
         interpretation: 'pipeline-conformance-only',

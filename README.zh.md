@@ -39,7 +39,7 @@ flowchart LR
     C -. 模型失败 .-> J[可召回的 L1 降级结果]
 ```
 
-每次写入都会先持久化一条 L1 原始记录和一个持久作业。使用抽取模式时，配置的记忆模型会生成经过 Schema 校验的 JSON，并只与同一所有者的记录调和。增强成功后会生成结构化记录，并把原始内容保留为来源证据；增强失败则返回 `degraded` 回执，同时保持原始内容可召回。
+每次写入都会先持久化一条 L1 原始记录和一个持久作业。使用抽取模式时，配置的记忆模型会生成经过 Schema 校验的 JSON。每条抽取事实或身份信息都有独立的同层、同所有者候选 shortlist；没有候选的来源会确定性生成 `ADD`，无需调和调用。增强成功后会生成结构化记录，并把原始内容保留为来源证据；增强失败则返回 `degraded` 回执，同时保持原始内容可召回。
 
 搜索会在排序前按所有者、可见性、状态、有效期、记忆层和可选的 Session 范围过滤。画像记忆与普通记忆使用相互独立的结果配额。
 
@@ -158,7 +158,7 @@ bundle patch 会从当前默认模型选择中提供 `provider` 与 `model`；�
 | `recallLimit` | `8` | 普通召回通道的最大结果数。 |
 | `profileLimit` | `4` | 单独预留的画像结果数。 |
 | `maxContextChars` | `6000` | 单个模型 Step 注入记忆上下文的最大字符数。 |
-| `reconcileCandidateLimit` | `12` | 提供给调和模型的现有候选数量。 |
+| `reconcileCandidateLimit` | `12` | 每条 extracted memory 提供给调和流程的现有候选上限。 |
 | `minSemanticScore` | `0.08` | 无词法匹配时所需的最低哈希向量余弦分数。 |
 | `rrfK` | `60` | 倒数排名融合的平滑常数。 |
 | `bm25K1` | `1.5` | BM25 词频饱和参数。 |
@@ -234,9 +234,9 @@ const result = await ctx.memory.search({
 
 启用自动召回后，插件会在当前用户消息前插入一条有长度上限、由 `<memory-recall>` 明确分隔的 user 消息。它会把召回记录标记为可能有误的背景，并要求模型在发生冲突时以当前请求为准。召回消息通过普通 Session surface 写入，因此可以从日志重建模型实际看到的请求。
 
-启用自动捕获后，已完成用户 Turn 中的非工具对话会作为不可信 JSON 数据发送给配置的记忆模型。抽取不会改变已经在生成中的回答。每个 Turn 会增加一次抽取调用；发现事实时，还会再增加一次调和调用。
+启用自动捕获后，已完成用户 Turn 中的非工具对话会作为不可信 JSON 数据发送给配置的记忆模型。抽取不会改变已经在生成中的回答。每个 Turn 会增加一次抽取调用和至多一次调和调用；若所有抽取来源的 shortlist 都为空，则通过确定性 `ADD` 省去第二次调用。
 
-使用远端 embedding 空间时，新增操作仍会在任何网络 I/O 前提交可召回的 L1 原始记录与 `accepted` 作业。首次提交使用同空间、同维度的零向量占位；增强成功后替换为已校验向量。Provider 失败会把作业标为 `degraded`、不创建派生记录，并保留可通过词法通道召回的原文。搜索只有在按 owner、状态、可见性、有效期、层级和 Session 完成过滤后才调用 provider 与 tokenizer；候选为空时两者都不会调用。非取消类 provider 故障只关闭语义排序并报告 `semantic:provider-unavailable`；tokenizer 故障只关闭 BM25 并报告 `lexical:tokenizer-unavailable`；两者均不可用时返回空通道和两项诊断。调和候选可以只依赖词法通道；仅依赖语义通道时，query 向量与至少一条候选向量必须均为非零，否则会用固定脱敏 tokenizer 错误降级 accepted job，并保留可召回 L1。调用方取消绝不会被转换为降级成功。
+使用远端 embedding 空间时，新增操作仍会在任何网络 I/O 前提交可召回的 L1 原始记录与 `accepted` 作业。首次提交使用同空间、同维度的零向量占位；增强成功后替换为已校验向量。Provider 失败会把作业标为 `degraded`、不创建派生记录，并保留可通过词法通道召回的原文。搜索只有在按 owner、状态、可见性、有效期、层级和 Session 完成过滤后才调用 provider 与 tokenizer；候选为空时两者都不会调用。非取消类 provider 故障只关闭语义排序并报告 `semantic:provider-unavailable`；tokenizer 故障只关闭 BM25 并报告 `lexical:tokenizer-unavailable`；两者均不可用时返回空通道和两项诊断。调和会先按来源层级过滤 active、recallable 且当前有效的记录，不以 Session 作为边界；只有候选池非空的来源才进入 provider/tokenizer。来源 query 按顺序有界分批嵌入；某批失败只关闭该批来源的语义通道，后续批次继续。每个来源可只依赖词法，或在 query 向量及至少一条候选向量均非零时只依赖语义；任一非空候选来源同时失去两条通道时，整个 accepted job 会用固定脱敏 tokenizer 错误降级，不提交部分派生记录。模型只看到 shortlist 非空的来源、稳定去重的候选目录和逐来源授权 ID。调用方取消绝不会被转换为降级成功。
 
 记忆内容会被发送到所配置的 embedding 端点。部署者应根据内容敏感程度选择端点及保留策略。密钥只从命名环境变量读取，不会进入 descriptor、错误、日志或评测报告。
 

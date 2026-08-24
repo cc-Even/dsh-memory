@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "datasetId": "dsh-memory-lifecycle-scripted",
-  "datasetVersion": "1.0.0",
-  "referenceCommit": "f32fbd7846ddf5c5130c5bb696c695b56b9d70a8",
+  "datasetVersion": "1.1.0",
+  "referenceCommit": "6b55f9e7afe27680ae32ba44cec183ce4e3e3f11",
   "provenance": {
     "mode": "scripted",
     "interpretation": "pipeline-conformance-only",
@@ -167,7 +167,13 @@
       "sessionId": "op-zh-add-tn-primary",
       "content": "用户：我的航班是周五上午九点。",
       "idempotencyKey": "op-zh-add-tn-extract",
-      "setup": [],
+      "setup": [
+        {
+          "alias": "candidate",
+          "content": "用户的航班提醒会在周五发送。",
+          "layer": "l2_fact"
+        }
+      ],
       "modelScript": [
         {
           "phase": "extraction",
@@ -675,7 +681,13 @@
       "sessionId": "op-en-add-tn-primary",
       "content": "User: I prefer concise weekly status reports.",
       "idempotencyKey": "op-en-add-tn-extract",
-      "setup": [],
+      "setup": [
+        {
+          "alias": "candidate",
+          "content": "The user prefers detailed weekly status reports.",
+          "layer": "l4_identity"
+        }
+      ],
       "modelScript": [
         {
           "phase": "extraction",
@@ -1072,7 +1084,13 @@
       "sessionId": "fault-en-model-reconciliation-primary",
       "content": "The user prefers early morning meetings.",
       "idempotencyKey": "fault-en-model-reconciliation-extract",
-      "setup": [],
+      "setup": [
+        {
+          "alias": "candidate",
+          "content": "The user prefers early afternoon meetings.",
+          "layer": "l4_identity"
+        }
+      ],
       "modelScript": [
         {
           "phase": "extraction",
@@ -1158,7 +1176,13 @@
       "sessionId": "fault-en-invalid-json-reconciliation-primary",
       "content": "The user prefers a silent keyboard.",
       "idempotencyKey": "fault-en-invalid-json-reconciliation-extract",
-      "setup": [],
+      "setup": [
+        {
+          "alias": "candidate",
+          "content": "The user prefers a low-profile keyboard.",
+          "layer": "l4_identity"
+        }
+      ],
       "modelScript": [
         {
           "phase": "extraction",
@@ -1247,7 +1271,13 @@
       "sessionId": "fault-en-schema-reconciliation-primary",
       "content": "The user prefers written design reviews.",
       "idempotencyKey": "fault-en-schema-reconciliation-extract",
-      "setup": [],
+      "setup": [
+        {
+          "alias": "candidate",
+          "content": "The user prefers spoken design reviews.",
+          "layer": "l4_identity"
+        }
+      ],
       "modelScript": [
         {
           "phase": "extraction",
