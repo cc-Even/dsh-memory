@@ -39,13 +39,13 @@ flowchart LR
     C -. model failure .-> J[Recallable L1 fallback]
 ```
 
-Every write first persists an L1 raw record and a durable job. In extraction mode, the configured memory model then produces schema-validated JSON. Each extracted fact or identity gets its own same-layer, same-owner candidate shortlist; sources with no candidates become deterministic `ADD` operations without a reconciliation call. Successful enrichment creates structured records and keeps the raw source as provenance; failed enrichment returns a `degraded` receipt while leaving the raw source recallable.
+Every write first persists an L1 raw record and a durable job. In extraction mode, the configured memory model receives the complete output JSON Schema and produces schema-validated JSON. Unknown optional fields must be omitted rather than filled with null or placeholder values. Each extracted fact or identity gets its own same-layer, same-owner candidate shortlist; sources with no candidates become deterministic `ADD` operations without a reconciliation call. Successful enrichment creates structured records and keeps the raw source as provenance; failed enrichment returns a `degraded` receipt while leaving the raw source recallable.
 
 Search filters ownership, visibility, status, validity, layer, and optional Session scope before ranking. Profile memories and normal memories have independent result budgets.
 
 ## Requirements
 
-- DeepSeek Harness with an available chat model
+- DeepSeek Harness `0.1.5-rc.2` with an available chat model (the current peer/test target)
 - Node.js `^22.19.0` or `>=24.0.0`
 - Durable Harness storage; the Web profile already provides it
 - pnpm `11.7.0` when developing from source
@@ -62,7 +62,7 @@ dsh --profile web --dump-config
 dsh --profile web
 ```
 
-The bundled patch mounts the memory service and its tools, and uses the Web profile's currently selected default model for extraction and reconciliation.
+The bundled patch mounts the memory service, its tools and the optional Web management consumer, and follows the Web profile's live default-model selection for each extraction write, including changes made in Settings after startup.
 
 To install directly from a Git revision:
 
@@ -72,9 +72,40 @@ dsh plugin --profile web add github:<owner>/dsh-memory#<commit-sha>
 
 Git installs run the package `prepare` script. Follow the one-time pnpm build-authorization prompt reported by `dsh` if it appears.
 
+### Run with a local Harness and DashScope
+
+This integration targets `0.1.5-rc.2`; the older `0.1.0-rc.7` pi-ai adapter does not expose the `supportsDeveloperRole` option required by this example. After updating an existing checkout, run `pnpm install --frozen-lockfile`, `pnpm clean`, and `pnpm build` in the Harness repository before installing the plugin.
+
+From this repository, with a built Harness `0.1.5-rc.2` checkout next to it:
+
+```sh
+pnpm install
+pnpm build
+export DSH_HARNESS_DIR=/home/cyw/deepseek-harness
+export DSH_HOME="$PWD/.local/harness-home"
+node "$DSH_HARNESS_DIR/apps/cli/lib/bin.js" plugin --profile web add "$PWD"
+node "$DSH_HARNESS_DIR/apps/cli/lib/bin.js" --profile web --patch "$PWD/examples/dashscope.patch.yml" --port 3080
+```
+
+Open the authenticated URL printed by Harness at startup (port `3080` here). A fresh browser request to the bare URL may return HTTP 401 until that link establishes a session. The local directory install links the built package; rebuild and restart after source changes. `.local/` holds this deployment's settings, sessions and memory. Reuse the same `DSH_HOME` across restarts. For an immutable package, run `pnpm pack --out /tmp/dsh-memory.tgz` and pass that tarball to `plugin ... add` instead.
+
+The [DashScope overlay](examples/dashscope.patch.yml) reads `DASHSCOPE_API_KEY` and `DASHSCOPE_API_URL` from the launch environment and selects `qwen3.7-flash` for chat and memory extraction. The URL must be an OpenAI-compatible base URL, without `/chat/completions`. It uses Harness's `llm-pi-ai` adapter and keeps embeddings local. Its token limits are deployment bounds, not vendor maximum specifications. Existing saved model settings take precedence over the overlay; select `dashscope-memory / qwen3.7-flash` in Settings if reusing a home. Credentials are not written into the overlay.
+
+To override an already installed bundle, pass a patch targeting `id: memory` with `config: { provider: ..., model: ... }` via `--patch`. Do not pass root Loader entries with `name` as a patch.
+
+### Verify the complete integration
+
+```sh
+pnpm harness:smoke --harness /home/cyw/deepseek-harness
+# Explicitly calls DashScope using the two environment variables above:
+pnpm harness:smoke --harness /home/cyw/deepseek-harness --live
+```
+
+The script builds and packs the plugin, installs it through the real CLI into a temporary home, and runs two separate Harness processes. It checks tool registration/search, automatic extraction, persisted raw evidence, cross-session recall after cold restart, and Web HTTP 200. The default mode uses a fake LLM only; package installation may download dependencies. Live mode sends only synthetic conversations from an empty working directory. Both modes remove their temporary home and stop their Host processes. Ordinary `pnpm test` never needs external model credentials.
+
 ### Configure it manually
 
-Use an explicit model route when mounting the service yourself or overriding the bundled defaults:
+To pin extraction to a fixed model, specify both route fields. This is a root Loader configuration fragment:
 
 ```yaml
 - name: '@evyn/dsh-memory'
@@ -103,8 +134,8 @@ Once enabled, ordinary conversation is enough. Completed human turns can be capt
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `provider` | `string` | required | LLM provider used for extraction and reconciliation. |
-| `model` | `string` | required | Model ID used for extraction and reconciliation. |
+| `provider` | `string` | current default | Fixed extraction provider; supply together with `model`, or omit both. |
+| `model` | `string` | current default | Fixed extraction model; supply together with `provider`, or omit both. |
 | `userId` | `string` | Harness anonymous ID | Stable user identity for memory ownership. |
 | `tenantId` | `string` | unset | Optional tenant namespace. |
 | `autoCapture` | `boolean` | `true` | Extract durable memory when a direct-human turn stops. |
@@ -112,7 +143,7 @@ Once enabled, ordinary conversation is enough. Completed human turns can be capt
 | `embedding` | object | `{ kind: "hash" }` | Portable hash or OpenAI-compatible embedding configuration. |
 | `tokenizer` | object | `{ kind: "cjk-bigram" }` | CJK-bigram or legacy BM25 tokenization policy. |
 
-The bundled patch supplies `provider` and `model` from the current default-model selection. They remain required when the service is mounted directly.
+When both fields are omitted, the service reads `agentDefaultModel.currentSelection()` after persisting raw evidence. One write uses the same provider/model for extraction and reconciliation; later writes see Settings changes. Explicit pairs stay fixed. Partial or blank pairs are invalid. Without a default-model service, direct writes and reads still work; extraction returns a `degraded` receipt while preserving recallable raw evidence. The bundle declares `agentDefaultModel` as a dependency.
 
 ### Embedding providers
 
@@ -222,7 +253,9 @@ The complete capability includes:
 - `search(input, signal?)`
 - `get(memoryId, scope)`
 - `list(input)`
-- `forget(memoryId, scope)`
+- `forget(memoryId, scope, expectedRevision?)`
+- `managementScopes()` / `inspect(scope)`
+- `revise(input, signal?)`
 - `export(scope)` / `import(scope, records)`
 - `health()`
 
@@ -242,6 +275,31 @@ Embedding vectors are deployment data sent to the configured endpoint. Choose an
 
 The default anonymous user ID is a local correlation identity, not authentication or authorization. Deployments handling sensitive or hostile content should provide an authenticated `userId`, review retention policy, and add policy filtering appropriate to their threat model.
 
+## Memory management and diagnostics
+
+After installing the bundle and restarting Harness, open **Settings → 记忆 (Memory)** to inspect the configured local owner's cross-session memory. Select an existing agent preset, filter by content/tags, layer and status, and browse paginated records, source evidence and version history. The default filter shows active records; deleted records remain accessible through the status filter.
+
+- **Confirm** saves human confirmation as new raw evidence and a new revision of the current fact or identity/preference.
+- **Correct** saves new content with reciprocal supersession links. Only active, recallable L2/L4 records can be revised; raw evidence cannot be overwritten.
+- **Soft delete** stops recall after confirmation. Deleting source evidence also soft-deletes derived records that lose their last source. It does not erase historical data from disk.
+- **Status and diagnostics** shows recallable/total records, completed/degraded writes, capture/recall settings and retrieval type. The last 30 durable jobs include duration, logical model-call counts and safe error codes; unavailable legacy metadata remains blank. The last 20 automatic recall attempts list only actually injected IDs, drawn from a global process-local buffer capped at 200 events and cleared on restart.
+
+In-progress jobs omit unfinished call counts. Recovered interrupted jobs retain start/recovery timestamps but report duration and call count as unknown, so downtime is never presented as processing time.
+
+The page refreshes on demand and after successful mutations; it does not poll. Writes check the whole owner-scope revision, so intervening writes require a refresh. Confirmation/correction makes no extraction-model calls, but an external embedding provider still receives the new evidence and revision content. Embedding failure keeps the old memory active and the durable raw evidence recallable, with a degraded receipt.
+
+Harness Connection protects the `/api/memory-management/*` RPC channel with its login cookie, Host and Origin checks. The browser selects only server-listed presets and cannot supply tenant/user/session identities. Responses omit vectors, arbitrary metadata, raw job warnings and provider exception bodies. Memory content and evidence are intentionally visible to the authenticated local administrator. This uses local deployment ownership; it does not implement multiuser authenticated identity mapping.
+
+Trusted APIs add `managementScopes()`, `inspect(scope)` and `revise({scope, memoryId, expectedRevision, action, content?, idempotencyKey})`; `forget(memoryId, scope, expectedRevision?)` optionally checks the scope revision. These APIs add no model tools. The `/management` Host entry activates only when `memory`, `connection` and `webServer` are available; headless compositions retain the service and existing tools.
+
+The real browser smoke uses an isolated temporary `DSH_HOME`, no external models, and checks packaged installation, authentication, isolation, UI mutations and cold restart:
+
+```sh
+# Install Playwright Chromium from the Harness checkout; system browser libraries are required.
+node "$DSH_HARNESS_DIR/apps/web/node_modules/playwright/cli.js" install chromium
+pnpm harness:management-smoke --harness "$DSH_HARNESS_DIR"
+```
+
 ## Current limitations
 
 - The built-in hash embedding is portable and deterministic, but weaker than a trained multilingual embedding model.
@@ -255,6 +313,10 @@ The default anonymous user ID is a local correlation identity, not authenticatio
 - The project does not yet provide authenticated subject mapping, a built-in retention policy, or writable L5-L7 semantics.
 
 See [the design document](docs/design.md) for the architecture, behavioral guarantees, and rejected alternatives.
+
+## Planned capability
+
+Privacy-aware adaptive memory is currently a draft design and does not change the default behavior of this release. The proposal covers a local privacy firewall, remote-egress controls for sensitive queries, explainable adaptive capture, a utility ledger, deterministic reranking, token-aware context packing, and sequential evaluation and rollback gates. See the [development plan](docs/privacy-aware-adaptive-memory-plan.md).
 
 ## Development
 

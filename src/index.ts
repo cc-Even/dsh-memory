@@ -9,11 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { deriveEventMessage } from '@deepseek-ai/dsh-session/surface'
-import type { JsonValue, SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import {
   EmbeddingProvider,
@@ -21,6 +23,7 @@ import {
   OpenAICompatibleEmbeddingProvider,
 } from './embedding.ts'
 import type { EmbeddingDescription } from './embedding.ts'
+import type { DiagnosticCode, MemoryDiagnostics, MemoryRecallDiagnostic, ReviseMemoryInput } from './diagnostics.ts'
 import { MemoryError } from './error.ts'
 import { extractMemories, reconcileMemories } from './model.ts'
 import type {
@@ -114,10 +117,10 @@ export type TokenizerConfig =
 
 /** Deployment configuration for extraction, hybrid recall, and automatic turn integration. */
 export interface Config {
-  /** LLM provider route used for extraction and reconciliation. */
-  provider: string
-  /** Model id used for extraction and reconciliation. */
-  model: string
+  /** Fixed LLM provider; omit with model to follow the Harness default per write. */
+  provider?: string
+  /** Fixed model id; must be supplied together with provider. */
+  model?: string
   /** Harness-user override; omitted derives the stable anonymous harness-home id. */
   userId?: string
   /** Optional deployment tenant namespace. */
@@ -173,8 +176,8 @@ type ResolvedTokenizerConfig = TokenizerConfig | { readonly kind: 'programmatic'
 
 /** Fully materialized, secret-free service policy. */
 export interface ResolvedConfig {
-  readonly provider: string
-  readonly model: string
+  readonly provider?: string
+  readonly model?: string
   readonly userId: string
   readonly tenantId?: string
   readonly autoCapture: boolean
@@ -203,8 +206,8 @@ const WRITABLE_LAYERS = new Set<MemoryLayer>([
 
 /** Schemastery loader validation for memory configuration. */
 export const Config: s<Config> = s.object({
-  provider: s.string().required(),
-  model: s.string().required(),
+  provider: s.string(),
+  model: s.string(),
   userId: s.string(),
   tenantId: s.string(),
   autoCapture: s.boolean().default(true),
@@ -256,8 +259,13 @@ export function resolveConfig(config: Config): ResolvedConfig {
   if (config.lexicalTokenizer !== undefined && config.tokenizer !== undefined) {
     throw new MemoryError('INVALID_INPUT', 'lexicalTokenizer and tokenizer config are mutually exclusive')
   }
-  const provider = requireNonEmpty(config.provider, 'provider')
-  const model = requireNonEmpty(config.model, 'model')
+  if ((config.provider === undefined) !== (config.model === undefined)) {
+    throw new MemoryError('INVALID_INPUT', 'provider and model must be supplied together, or both omitted to follow agentDefaultModel')
+  }
+  const route = config.provider === undefined ? {} : {
+    provider: requireNonEmpty(config.provider, 'provider'),
+    model: requireNonEmpty(config.model, 'model'),
+  }
   const userId = config.userId === undefined
     ? getOrCreateAnonymousUserId()
     : requireNonEmpty(config.userId, 'userId')
@@ -268,8 +276,7 @@ export function resolveConfig(config: Config): ResolvedConfig {
     ? normalizeTokenizerConfig(config.tokenizer)
     : programmaticTokenizerConfig(config.lexicalTokenizer)
   const resolved: ResolvedConfig = {
-    provider,
-    model,
+    ...route,
     userId,
     ...(config.tenantId === undefined ? {} : { tenantId: requireNonEmpty(config.tenantId, 'tenantId') }),
     autoCapture: config.autoCapture ?? true,
@@ -380,8 +387,19 @@ function isTokenizationFailure(error: unknown): error is MemoryError {
   return error instanceof MemoryError && error.code === 'TOKENIZATION_FAILED'
 }
 
-function modelRoute(config: ResolvedConfig): { provider: string; model: string; maxTokens: number } {
-  return { provider: config.provider, model: config.model, maxTokens: config.maxModelTokens }
+/** Resolve a detached route once per enrichment, after its raw evidence is durable. */
+function modelRoute(ctx: Context, config: ResolvedConfig): { provider: string; model: string; maxTokens: number } {
+  const selection = config.provider === undefined
+    ? ctx.get('agentDefaultModel')?.currentSelection()
+    : config
+  if (selection === undefined) {
+    throw new MemoryError('EXTRACTION_FAILED', 'memory extraction requires agentDefaultModel or an explicit provider/model pair')
+  }
+  return {
+    provider: requireNonEmpty(selection.provider, 'provider'),
+    model: requireNonEmpty(selection.model, 'model'),
+    maxTokens: config.maxModelTokens,
+  }
 }
 
 function normalizeEmbeddingConfig(value: EmbeddingConfig | undefined): EmbeddingConfig {
@@ -496,6 +514,7 @@ export class MemoryService extends Service implements MemoryCapability {
   private table?: KvTable<MemoryScopeKey, MemoryScopeState>
   private readonly operationTails = new Map<MemoryScopeKey, Promise<void>>()
   private admissionOpen = true
+  private readonly recalls: Array<{ key: MemoryScopeKey; event: MemoryRecallDiagnostic }> = []
 
   /**
    * @param ctx - Harness context carrying agents, LLM, and durable domain storage.
@@ -581,12 +600,15 @@ export class MemoryService extends Service implements MemoryCapability {
         status: 'accepted',
         createdMemoryIds: [],
         warnings: [],
+        startedAt: now,
+        modelCalls: 0,
       }
       const accepted: MemoryScopeState = {
         revision: current.revision + 1,
         records: [...current.records, raw],
         jobs: [...current.jobs, job],
       }
+      let stage: DiagnosticCode = resolved.mode === 'direct' ? 'EMBEDDING_FAILED' : 'EXTRACTION_FAILED'
       let completionAttempted = false
       try {
         await this.writeState(key, current, accepted)
@@ -619,23 +641,27 @@ export class MemoryService extends Service implements MemoryCapability {
         }
 
         throwIfAborted(signal)
+        const route = modelRoute(this.ctx, this.config)
+        job.modelCalls = 1
         const extraction = await extractMemories(
           this.ctx,
-          modelRoute(this.config),
+          route,
           resolved.content,
           existingTags(accepted.records),
           this.config.profileFields,
           signal,
         )
         const extracted = this.sanitizeExtraction(extraction)
+        stage = 'RECONCILE_FAILED'
         const candidateInputs = await this.reconcileCandidates(accepted.records, extracted, signal)
         const modelInputs = candidateInputs.filter(input => input.shortlist.length > 0)
         const automaticOperations: ReconcileOperation[] = candidateInputs
           .filter(input => input.shortlist.length === 0)
           .map(input => ({ type: 'ADD', sourceRef: input.source.clientRef }))
+        job.modelCalls = modelInputs.length === 0 ? 1 : 2
         const modelOperations = modelInputs.length === 0
           ? []
-          : await reconcileMemories(this.ctx, modelRoute(this.config), modelInputs, signal)
+          : await reconcileMemories(this.ctx, route, modelInputs, signal)
         validatePlan(modelInputs, modelOperations)
         const operations = orderOperations(
           [...automaticOperations, ...modelOperations],
@@ -651,6 +677,7 @@ export class MemoryService extends Service implements MemoryCapability {
         )
         const acceptedIds = new Set(accepted.records.map(record => record.id))
         const embeddingIds = [raw.id, ...records.filter(record => !acceptedIds.has(record.id)).map(record => record.id)]
+        stage = 'EMBEDDING_FAILED'
         const embedded = await this.embedSelectedRecords(records, embeddingIds, signal)
         completionAttempted = true
         return await this.commitSuccess(key, accepted, job, raw.id, embedded)
@@ -660,7 +687,7 @@ export class MemoryService extends Service implements MemoryCapability {
         const warning = callerAborted
           ? 'memory enrichment aborted'
           : error instanceof Error ? error.message : String(error)
-        const degradedJob: StoredMemoryJob = { ...job, status: 'degraded', warnings: [warning] }
+        const degradedJob: StoredMemoryJob = { ...job, ...finishedTiming(job), status: 'degraded', code: callerAborted ? 'ABORTED' : diagnosticCode(error, stage), warnings: [warning] }
         const degraded: MemoryScopeState = {
           revision: accepted.revision + 1,
           records: accepted.records,
@@ -785,11 +812,12 @@ export class MemoryService extends Service implements MemoryCapability {
    * @param scope - Owning tenant/user/agent scope.
    * @returns deletion outcome and every changed record id.
    */
-  forget(memoryId: MemoryId, scope: MemoryScope): Promise<ForgetReceipt> {
+  forget(memoryId: MemoryId, scope: MemoryScope, expectedRevision?: number): Promise<ForgetReceipt> {
     const resolved = resolveScope(scope)
     const key = scopeKey(resolved)
     return this.enqueue(key, async () => {
       const current = this.readState(key)
+      if (expectedRevision !== undefined) checkRevision(current, expectedRevision)
       const target = current.records.find(record => record.id === memoryId)
       if (target === undefined || target.status === 'deleted') {
         return { forgotten: false, memoryId, affectedMemoryIds: [] }
@@ -879,6 +907,104 @@ export class MemoryService extends Service implements MemoryCapability {
     }
   }
 
+  /** Presets available to the configured local owner; never enumerates other owners. */
+  managementScopes(): readonly MemoryScope[] {
+    const owner = { userId: this.config.userId, ...(this.config.tenantId === undefined ? {} : { tenantId: this.config.tenantId }) }
+    const agents = new Set(['default'])
+    for (const [, state] of this.requireTable().entries()) {
+      const scope = state.records[0]?.scope
+      if (scope?.userId === owner.userId && scope.tenantId === owner.tenantId) agents.add(scope.agentId)
+    }
+    return [...agents].sort().map(agentId => ({ ...owner, agentId }))
+  }
+
+  /** Owner-scoped safe diagnostics. No content, vector, provider response, or credential is returned. */
+  inspect(scope: MemoryScope): MemoryDiagnostics {
+    const key = scopeKey(resolveScope(scope))
+    const state = this.readState(key)
+    const counts: MemoryDiagnostics['counts'] = { records: state.records.length, recallable: 0,
+      statuses: { active: 0, superseded: 0, archived: 0, deleted: 0 }, layers: {},
+      jobs: { accepted: 0, completed: 0, degraded: 0 } }
+    let recallable = 0
+    const now = new Date().toISOString()
+    for (const record of state.records) {
+      counts.statuses[record.status]++
+      counts.layers[record.layer] = (counts.layers[record.layer] ?? 0) + 1
+      if (record.status === 'active' && record.visibility === 'recallable' && validAt(record, now)) recallable++
+    }
+    for (const job of state.jobs) counts.jobs[job.status]++
+    return structuredClone({
+      revision: state.revision, counts: { ...counts, recallable },
+      policy: { autoCapture: this.config.autoCapture, autoRecall: this.config.autoRecall,
+        embeddingQuality: this.embeddingDescription.quality, maxRecordChars: this.config.maxRecordChars },
+      jobs: state.jobs.slice(-30).reverse().map(job => ({
+        jobId: job.jobId, rawMemoryId: job.rawMemoryId, status: job.status,
+        ...(job.startedAt === undefined ? {} : { startedAt: job.startedAt }),
+        ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
+        ...(job.durationMs === undefined ? {} : { durationMs: job.durationMs }),
+        ...(job.modelCalls === undefined || job.status === 'accepted' ? {} : { modelCalls: job.modelCalls }),
+        ...(job.code === undefined ? {} : { code: job.code }),
+      })),
+      recalls: this.recalls.filter(entry => entry.key === key).slice(-20).reverse().map(entry => entry.event),
+    })
+  }
+
+  /** Confirm or correct a current fact with new raw evidence and a non-destructive revision. */
+  async revise(input: ReviseMemoryInput, signal?: AbortSignal): Promise<WriteReceipt> {
+    const scope = resolveScope(input.scope)
+    const key = scopeKey(scope)
+    const idempotencyKey = requireNonEmpty(input.idempotencyKey, 'idempotencyKey')
+    if (input.action !== 'confirm' && input.action !== 'correct') throw new MemoryError('INVALID_INPUT', 'invalid revision action')
+    const content = input.action === 'correct' ? requireNonEmpty(input.content, 'content') : undefined
+    if (content !== undefined && content.length > this.config.maxRecordChars) throw new MemoryError('INVALID_INPUT', 'correction exceeds maxRecordChars')
+    if (input.action === 'confirm' && input.content !== undefined) throw new MemoryError('INVALID_INPUT', 'confirmation cannot change content')
+    return this.enqueue(key, async () => {
+      throwIfAborted(signal)
+      const current = this.readState(key)
+      const prior = current.jobs.find(job => job.idempotencyKey === idempotencyKey)
+      if (prior !== undefined) return receiptOf(prior)
+      checkRevision(current, input.expectedRevision)
+      const target = current.records.find(record => record.id === input.memoryId)
+      if (target === undefined || target.status !== 'active' || target.visibility !== 'recallable'
+        || (target.layer !== 'l2_fact' && target.layer !== 'l4_identity')) {
+        throw new MemoryError('INVALID_INPUT', 'only current facts and identities can be revised')
+      }
+      const now = new Date().toISOString()
+      const raw = this.record({ scope, layer: 'l1_raw', content: content ?? target.content,
+        visibility: 'recallable', sourceType: 'explicit', confidence: 1, idempotencyKey,
+        meta: { managementAction: input.action, targetMemoryId: target.id }, now })
+      const job: StoredMemoryJob = { idempotencyKey, requestId: randomUUID(), jobId: `memory-job-${randomUUID()}` as MemoryJobId,
+        rawMemoryId: raw.id, status: 'accepted', createdMemoryIds: [], warnings: [], startedAt: now, modelCalls: 0 }
+      const accepted: MemoryScopeState = { revision: current.revision + 1, records: [...current.records, raw], jobs: [...current.jobs, job] }
+      try { await this.writeState(key, current, accepted) }
+      catch (error) { throw new MemoryError('RAW_PERSIST_FAILED', 'memory revision evidence could not be persisted', { cause: error }) }
+      let records: readonly MemoryRecord[]
+      try {
+        const chainId = target.chainId ?? randomUUID()
+        const derived = this.record({ scope, layer: target.layer, content: raw.content, visibility: 'recallable',
+          sourceType: 'explicit', confidence: 1, chainId, revision: target.revision + 1,
+          supersedes: [target.id], sourceMemoryIds: [raw.id], tags: target.tags,
+          meta: { managementAction: input.action }, now })
+        const updated = accepted.records.map((record): MemoryRecord => record.id === target.id
+          ? { ...record, chainId, status: 'superseded', visibility: 'source_only', supersededBy: [derived.id], updatedAt: now }
+          : record.id === raw.id ? { ...record, visibility: 'source_only' } : record)
+        records = await this.embedSelectedRecords([...updated, derived], [raw.id, derived.id], signal)
+      } catch (error) {
+        const degradedJob: StoredMemoryJob = { ...job, ...finishedTiming(job), status: 'degraded',
+          code: signal?.aborted ? 'ABORTED' : diagnosticCode(error, 'EMBEDDING_FAILED'), warnings: ['memory revision enrichment failed'] }
+        await this.writeState(key, accepted, { ...accepted, revision: accepted.revision + 1, jobs: replaceJob(accepted.jobs, degradedJob) })
+        if (signal?.aborted) throw signal.reason ?? error
+        return receiptOf(degradedJob)
+      }
+      return await this.commitSuccess(key, accepted, job, raw.id, records)
+    })
+  }
+
+  private recordRecall(scope: MemoryScope, event: MemoryRecallDiagnostic): void {
+    this.recalls.push({ key: scopeKey(scope), event })
+    if (this.recalls.length > 200) this.recalls.splice(0, this.recalls.length - 200)
+  }
+
   private installHooks(): void {
     if (this.config.autoRecall) {
       this.ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
@@ -887,8 +1013,23 @@ export class MemoryService extends Service implements MemoryCapability {
         const direct = decision.messages.filter(message => message.source.kind === 'user')
         const query = direct.map(messageText).filter(Boolean).join('\n')
         if (query.length === 0) return decision
-        const result = await this.search({ scope: this.scopeFor(agent), query }, signal)
-        const context = recallContext(result, this.config.maxContextChars)
+        const scope = this.scopeFor(agent)
+        const started = Date.now()
+        let context: string
+        try {
+          const result = await this.search({ scope, query }, signal)
+          const rendered = recallContext(result, this.config.maxContextChars)
+          context = rendered.text
+          this.recordRecall(scope, {
+            at: new Date().toISOString(), durationMs: Math.max(0, Date.now() - started),
+            outcome: context.length === 0 ? 'empty' : 'injected', memoryIds: rendered.ids,
+            degradedChannels: result.diagnostics.degradedChannels,
+          })
+        } catch (error) {
+          this.recordRecall(scope, { at: new Date().toISOString(), durationMs: Math.max(0, Date.now() - started),
+            outcome: 'error', memoryIds: [], degradedChannels: [], code: signal.aborted ? 'ABORTED' : diagnosticCode(error, 'UNKNOWN') })
+          throw error
+        }
         if (context.length === 0) return decision
         return {
           kind: 'enter',
@@ -904,7 +1045,7 @@ export class MemoryService extends Service implements MemoryCapability {
     }
     if (this.config.autoCapture) {
       this.ctx.on('agent/turn-stopping', async ({ agent, turn, signal }) => {
-        const messages = messagesForTurn(agent.session.events, turn)
+        const messages = messagesForTurn(agent.session.snapshotEvents(), turn)
         if (!messages.some(message => message.role === 'user' && message.source.kind === 'user')) return
         const content = JSON.stringify(messages.map((message, index) => ({
           turnIndex: index,
@@ -920,7 +1061,7 @@ export class MemoryService extends Service implements MemoryCapability {
             sourceTurnIndexes: [turn],
           }, signal)
         } catch (error) {
-          this.ctx.logger.warn(`memory capture failed for session '${agent.session.id}' turn ${turn}: ${String(error)}`)
+          this.ctx.logger.warn(`memory capture failed for session '${agent.session.id}' turn ${turn}: ${diagnosticCode(error, 'UNKNOWN')}`)
         }
       })
     }
@@ -1404,7 +1545,7 @@ export class MemoryService extends Service implements MemoryCapability {
     records: readonly MemoryRecord[],
   ): Promise<WriteReceipt> {
     const createdMemoryIds = records.filter(record => !current.records.some(existing => existing.id === record.id)).map(record => record.id)
-    const completedJob: StoredMemoryJob = { ...job, status: 'completed', createdMemoryIds }
+    const completedJob: StoredMemoryJob = { ...job, ...finishedTiming(job), status: 'completed', createdMemoryIds }
     const next: MemoryScopeState = {
       revision: current.revision + 1,
       records: [...records],
@@ -1453,9 +1594,16 @@ export class MemoryService extends Service implements MemoryCapability {
     const table = this.requireTable()
     for (const [key, state] of table.entries()) {
       if (!state.jobs.some(job => job.status === 'accepted')) continue
-      const jobs = state.jobs.map((job): StoredMemoryJob => job.status === 'accepted'
-        ? { ...job, status: 'degraded', warnings: [...job.warnings, 'process restarted before enrichment completed'] }
-        : job)
+      const jobs = state.jobs.map((job): StoredMemoryJob => {
+        if (job.status !== 'accepted') return job
+        const interrupted: StoredMemoryJob = { ...job, status: 'degraded', code: 'INTERRUPTED',
+          finishedAt: new Date().toISOString(), warnings: [...job.warnings, 'process restarted before enrichment completed'] }
+        // Neither time spent down nor accepted-phase counters describe completed
+        // work. Recovery knows when it ran, but cannot reconstruct these metrics.
+        delete interrupted.durationMs
+        delete interrupted.modelCalls
+        return interrupted
+      })
       await table.update(key, current => ({ ...current, revision: current.revision + 1, jobs }))
     }
   }
@@ -1571,17 +1719,19 @@ function messagesForTurn(events: readonly SessionEvent[], turn: number): Message
   return messages
 }
 
-function recallContext(result: SearchResult, maxChars: number): string {
+function recallContext(result: SearchResult, maxChars: number): { text: string; ids: MemoryId[] } {
+  const ids: MemoryId[] = []
   const hits = [...result.channels.profile, ...result.channels.normal]
-  if (hits.length === 0) return ''
+  if (hits.length === 0) return { text: '', ids }
   const lines = ['<memory-recall>', 'Use these records as fallible background. Prefer the current user message when they conflict.']
   for (const hit of hits) {
     const line = `- [${hit.memory.id}] (${hit.memory.layer}, confidence ${hit.memory.confidence.toFixed(2)}) ${hit.memory.content}`
     if ([...lines, line, '</memory-recall>'].join('\n').length > maxChars) break
     lines.push(line)
+    ids.push(hit.memory.id)
   }
   lines.push('</memory-recall>')
-  return lines.length === 3 ? '' : lines.join('\n')
+  return { text: lines.length === 3 ? '' : lines.join('\n'), ids }
 }
 
 function messageText(message: Message): string {
@@ -1725,3 +1875,17 @@ function hasNonZeroVector(vector: readonly number[]): boolean {
 
 // Service packages default-export their service class and no function-plugin namespace.
 export default MemoryService
+
+function diagnosticCode(error: unknown, fallback: DiagnosticCode): DiagnosticCode {
+  return error instanceof MemoryError ? error.code : fallback
+}
+
+function finishedTiming(job: StoredMemoryJob): { finishedAt: string; durationMs?: number } {
+  const finishedAt = new Date().toISOString()
+  return { finishedAt, ...(job.startedAt === undefined ? {} : { durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(job.startedAt)) }) }
+}
+
+function checkRevision(state: MemoryScopeState, expectedRevision: number): void {
+  nonNegativeInteger(expectedRevision, 'expectedRevision')
+  if (state.revision !== expectedRevision) throw new MemoryError('CONCURRENT_MODIFICATION', 'memory changed; refresh before retrying')
+}

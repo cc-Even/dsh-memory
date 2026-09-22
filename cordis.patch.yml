@@ -2,9 +2,9 @@
     - id: memory
       name: '@evyn/dsh-memory'
       inject: [agentDefaultModel]
-      config:
-        provider: !!js ctx.agentDefaultModel.currentSelection().provider
-        model: !!js ctx.agentDefaultModel.currentSelection().model
 
     - id: tool-memory
       name: '@evyn/dsh-memory/tool'
+
+    - id: memory-management
+      name: '@evyn/dsh-memory/management'

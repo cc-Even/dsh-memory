@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions } from '@deepseek-ai/dsh-llm'
-import type { JsonValue } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { MemoryRecord } from './types.ts'
 
 const extractedMemorySchema = z.object({
@@ -71,6 +71,10 @@ const operationSchema = z.discriminatedUnion('type', [
 
 const reconciliationSchema = z.object({ operations: z.array(operationSchema) })
 
+// Give models the same field constraints that guard the persistence boundary.
+const EXTRACTION_JSON_SCHEMA = JSON.stringify(z.toJSONSchema(extractionSchema))
+const RECONCILIATION_JSON_SCHEMA = JSON.stringify(z.toJSONSchema(reconciliationSchema))
+
 /** Validated reconciliation operation. */
 export type ReconcileOperation = z.infer<typeof operationSchema>
 
@@ -103,12 +107,15 @@ export async function extractMemories(
 ): Promise<ExtractionResult> {
   const prompt = [
     'Extract durable information from the conversation JSON below.',
-    'Return exactly one JSON object with keys basicProfilePatch, facts, identities, summary.',
+    'Return only one JSON object conforming to OUTPUT_JSON_SCHEMA, without markdown fences or commentary.',
+    'Always include basicProfilePatch, facts, and identities. Omit optional fields when unknown or unnecessary; never use null, false, or an empty string as a placeholder.',
     'facts and identities are arrays of {clientRef,content,layer,tags,confidence,occurredAt?,speculate?,evidenceTurnIndexes}.',
+    'occurredAt is an optional ISO date-time string. speculate is an optional non-empty explanation string, not a boolean. summary is optional and must be non-empty when included.',
     'Use layer l2_fact for events and changing facts; use l4_identity for stable preferences, traits, and identity.',
     'Do not store assistant guesses as user facts. Preserve the source language. Every item needs a unique clientRef and evidence turn indexes.',
     `basicProfilePatch may use only these keys: ${profileFields.join(', ') || '(none)'}.`,
     `Reuse these tags when accurate: ${existingTags.join(', ') || '(none)'}.`,
+    `OUTPUT_JSON_SCHEMA=${EXTRACTION_JSON_SCHEMA}`,
     '',
     conversation,
   ].join('\n')
@@ -132,8 +139,10 @@ export async function reconcileMemories(
   const candidates = stableCandidateCatalog(inputs)
   const prompt = [
     'Return exactly {"operations":[...]} and cover every source clientRef exactly once.',
+    'Conform to OUTPUT_JSON_SCHEMA. Return only JSON, without markdown fences or commentary.',
     'ADD is new information. NOOP is an exact duplicate. CONSOLIDATE merges compatible information into one complete text. SUPERSEDE replaces facts that cannot both be current.',
     'Never delete. Each operation may name only candidate ids authorized for its source; CONSOLIDATE may use the union for its participating sources. Keep layers separate.',
+    `OUTPUT_JSON_SCHEMA=${RECONCILIATION_JSON_SCHEMA}`,
     '',
     `SOURCES=${JSON.stringify(inputs.map(input => ({
       source: input.source,

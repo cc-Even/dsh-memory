@@ -39,13 +39,13 @@ flowchart LR
     C -. 模型失败 .-> J[可召回的 L1 降级结果]
 ```
 
-每次写入都会先持久化一条 L1 原始记录和一个持久作业。使用抽取模式时，配置的记忆模型会生成经过 Schema 校验的 JSON。每条抽取事实或身份信息都有独立的同层、同所有者候选 shortlist；没有候选的来源会确定性生成 `ADD`，无需调和调用。增强成功后会生成结构化记录，并把原始内容保留为来源证据；增强失败则返回 `degraded` 回执，同时保持原始内容可召回。
+每次写入都会先持久化一条 L1 原始记录和一个持久作业。使用抽取模式时，记忆模型会收到完整的输出 JSON Schema，并生成经过校验的 JSON；未知可选字段应省略，不得以 null 或占位值填充。每条抽取事实或身份信息都有独立的同层、同所有者候选 shortlist；没有候选的来源会确定性生成 `ADD`，无需调和调用。增强成功后会生成结构化记录，并把原始内容保留为来源证据；增强失败则返回 `degraded` 回执，同时保持原始内容可召回。
 
 搜索会在排序前按所有者、可见性、状态、有效期、记忆层和可选的 Session 范围过滤。画像记忆与普通记忆使用相互独立的结果配额。
 
 ## 环境要求
 
-- 已配置可用对话模型的 DeepSeek Harness
+- 已配置可用对话模型的 DeepSeek Harness `0.1.5-rc.2`（当前 peer 依赖与测试目标）
 - Node.js `^22.19.0` 或 `>=24.0.0`
 - Harness 持久存储；Web profile 已默认提供
 - 从源码开发时使用 pnpm `11.7.0`
@@ -62,7 +62,7 @@ dsh --profile web --dump-config
 dsh --profile web
 ```
 
-包内 patch 会同时挂载记忆服务及其工具，并使用 Web profile 当前选择的默认模型进行抽取和调和。
+包内 patch 会同时挂载记忆服务、工具和可选的 Web 管理消费者，每次抽取写入都跟随 Web profile 的当前默认模型，包括启动后在设置页修改的选择。
 
 也可以直接从指定 Git 版本安装：
 
@@ -72,9 +72,40 @@ dsh plugin --profile web add github:<owner>/dsh-memory#<commit-sha>
 
 Git 安装会运行包的 `prepare` 脚本。如果 `dsh` 提示 pnpm 构建授权，请按提示完成一次性授权。
 
+### 使用本机 Harness 与 DashScope
+
+本次集成目标为 `0.1.5-rc.2`；旧版 `0.1.0-rc.7` 的 `llm-pi-ai` 不支持本示例需要的 `supportsDeveloperRole` 配置。升级已有源码后建议先在 Harness 仓库运行 `pnpm install --frozen-lockfile`、`pnpm clean`、`pnpm build`，再安装插件。
+
+在本仓库中执行，假设旁边已有构建完成的 Harness `0.1.5-rc.2` 源码：
+
+```sh
+pnpm install
+pnpm build
+export DSH_HARNESS_DIR=/home/cyw/deepseek-harness
+export DSH_HOME="$PWD/.local/harness-home"
+node "$DSH_HARNESS_DIR/apps/cli/lib/bin.js" plugin --profile web add "$PWD"
+node "$DSH_HARNESS_DIR/apps/cli/lib/bin.js" --profile web --patch "$PWD/examples/dashscope.patch.yml" --port 3080
+```
+
+使用 Harness 启动时输出的带认证信息的链接打开页面（这里使用端口 `3080`）。尚未登录时直接访问根地址可能返回 HTTP 401，先打开启动链接即可建立浏览器会话。目录安装会链接已构建的包；源码修改后需要重新构建并重启。`.local/` 保存这套部署的设置、会话和记忆，重启时应沿用相同的 `DSH_HOME`。若需要固定的安装产物，可先运行 `pnpm pack --out /tmp/dsh-memory.tgz`，再把压缩包路径传给 `plugin ... add`。
+
+[DashScope overlay](examples/dashscope.patch.yml) 从启动环境读取 `DASHSCOPE_API_KEY` 和 `DASHSCOPE_API_URL`，使用 `qwen3.7-flash` 进行对话与记忆抽取。URL 应为 OpenAI 兼容接口的 base URL，不含 `/chat/completions`。它使用 Harness 的 `llm-pi-ai` 适配器，Embedding 仍在本地执行。示例中的 token 限制是部署上限，不是模型厂商的最大规格。已有保存的默认模型设置优先于 overlay；复用旧 home 时，可在设置页选择 `dashscope-memory / qwen3.7-flash`。密钥不会写入 overlay 文件。
+
+覆盖已安装 bundle 时，应通过 `--patch` 传入以 `id: memory` 为目标、包含 `config: { provider: ..., model: ... }` 的 patch，不要把带 `name` 的 Loader 根配置条目当作 patch。
+
+### 验证完整联动
+
+```sh
+pnpm harness:smoke --harness /home/cyw/deepseek-harness
+# 显式调用 DashScope，使用上述两个环境变量：
+pnpm harness:smoke --harness /home/cyw/deepseek-harness --live
+```
+
+脚本构建并打包插件，通过真实 CLI 安装到临时 home，再先后启动两个独立 Harness 进程。检查内容包括工具注册与搜索、自动抽取、原始证据落盘、冷重启后的跨会话召回和 Web HTTP 200。默认模式仅模拟 LLM；安装依赖时可能联网下载包。live 模式从空工作目录发送合成测试对话。两种模式结束后都会删除临时 home 并停止宿主进程。普通 `pnpm test` 不需要外部模型凭据。
+
 ### 手动配置
 
-手动挂载服务或需要覆盖 bundle 默认值时，请显式指定模型路由：
+需要固定抽取模型时，同时提供两个路由字段。下面是 Loader 根配置片段：
 
 ```yaml
 - name: '@evyn/dsh-memory'
@@ -103,8 +134,8 @@ Git 安装会运行包的 `prepare` 脚本。如果 `dsh` 提示 pnpm 构建授�
 
 | 选项 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `provider` | `string` | 必填 | 用于抽取和调和的 LLM provider。 |
-| `model` | `string` | 必填 | 用于抽取和调和的模型 ID。 |
+| `provider` | `string` | 当前默认模型 | 固定抽取 provider；与 `model` 同时提供，或同时省略。 |
+| `model` | `string` | 当前默认模型 | 固定抽取模型；与 `provider` 同时提供，或同时省略。 |
 | `userId` | `string` | Harness 匿名 ID | 用于确定记忆所有权的稳定用户身份。 |
 | `tenantId` | `string` | 未设置 | 可选的租户命名空间。 |
 | `autoCapture` | `boolean` | `true` | 直接用户 Turn 停止时抽取持久记忆。 |
@@ -112,7 +143,7 @@ Git 安装会运行包的 `prepare` 脚本。如果 `dsh` 提示 pnpm 构建授�
 | `embedding` | 对象 | `{ kind: "hash" }` | 便携哈希或 OpenAI 兼容 Embedding 配置。 |
 | `tokenizer` | 对象 | `{ kind: "cjk-bigram" }` | CJK bigram 或 legacy BM25 分词策略。 |
 
-bundle patch 会从当前默认模型选择中提供 `provider` 与 `model`；直接挂载服务时，这两个字段仍为必填项。
+同时省略两个字段时，服务会在原始证据持久化后读取 `agentDefaultModel.currentSelection()`。同一次写入的抽取与调和使用同一 provider/model，后续写入读取新的设置。显式指定的模型对保持固定；缺少其中一个或提供空白值均无效。没有默认模型服务时，直接写入和读取仍然可用，抽取返回 `degraded` 回执并保留可召回原文。bundle 声明了对 `agentDefaultModel` 的依赖。
 
 ### Embedding Provider
 
@@ -222,7 +253,9 @@ const result = await ctx.memory.search({
 - `search(input, signal?)`
 - `get(memoryId, scope)`
 - `list(input)`
-- `forget(memoryId, scope)`
+- `forget(memoryId, scope, expectedRevision?)`
+- `managementScopes()` / `inspect(scope)`
+- `revise(input, signal?)`
 - `export(scope)` / `import(scope, records)`
 - `health()`
 
@@ -242,6 +275,31 @@ const result = await ctx.memory.search({
 
 默认匿名用户 ID 只是本地关联身份，不代表认证或授权。处理敏感或敌意内容的部署应提供经过认证的 `userId`，审查数据保留策略，并按自身威胁模型增加内容策略过滤。
 
+## 记忆管理与诊断
+
+安装 bundle 并重启 Harness 后，在 **设置 → 记忆** 中查看当前本机所有者的跨会话记忆。可切换已存在的智能体预设，按内容/标签、层级和状态筛选，分页查看来源证据及版本历史。默认只显示有效记录；软删除的记录可通过状态筛选查看。
+
+- **确认记忆**：为当前事实或身份/偏好保存人工确认的原始证据及新版本。
+- **更正**：保存新内容，并建立与旧版本的双向替代关系。只允许修改当前有效且可召回的 L2/L4，不能直接改写原始证据。
+- **软删除**：确认后停止召回；删除来源证据可能使失去全部来源的派生记录一起软删除。它不擦除磁盘历史。
+- **状态与诊断**：展示可召回/全部记录计数、完成/降级写入、捕获/召回开关及检索类型。最近 30 个持久作业显示耗时、逻辑模型调用次数和安全错误码；旧作业没有的诊断字段显示为空。最近 20 次自动召回仅列出实际注入的记忆，来自最多 200 条全局进程内缓存，重启后清空。
+
+处理中作业不显示未完成的调用计数；中断恢复作业保留开始时间和恢复时间，但耗时与调用次数显示为未知，避免把停机时间误算为处理耗时。
+
+页面不会自动轮询；点击“刷新”获取最新状态，操作成功后自动刷新。操作使用整个 owner scope 的修订号校验，若其他会话已写入，会要求刷新后重试。确认/更正不调用抽取模型，但配置外部 embedding 时仍会发送新证据与新版本内容到该服务；嵌入失败会保留旧记忆，并把已保存的原始证据标为降级、保持可召回。
+
+管理端通过 Harness Connection 的登录 cookie、Host 与 Origin 校验保护 `/api/memory-management/*` RPC。浏览器只能选择服务端列出的预设，不能指定 tenant/user/session；响应不包含向量、任意 metadata、原始作业警告或提供方错误正文。记忆正文及来源证据会显示给已登录的本机管理者。此入口沿用本机部署所有者权限，不提供多人认证主体映射。
+
+可信服务新增 `managementScopes()`、`inspect(scope)`、`revise({scope, memoryId, expectedRevision, action, content?, idempotencyKey})`；`forget(memoryId, scope, expectedRevision?)` 可选校验作用域修订号。这些接口不新增模型工具。`/management` 宿主入口仅在 `memory`、`connection`、`webServer` 都就绪时挂载；无 Web 服务的组合仍能使用记忆服务和原有工具。
+
+实际浏览器验收使用独立临时 `DSH_HOME`，不访问外部模型，测试打包安装、认证、隔离、页面操作与冷重启：
+
+```sh
+# 在 Harness 源码中安装 Playwright Chromium（需系统浏览器运行库）
+node "$DSH_HARNESS_DIR/apps/web/node_modules/playwright/cli.js" install chromium
+pnpm harness:management-smoke --harness "$DSH_HARNESS_DIR"
+```
+
 ## 当前限制
 
 - 内建哈希嵌入可移植且确定，但弱于经过训练的多语言嵌入模型。
@@ -255,6 +313,10 @@ const result = await ctx.memory.search({
 - 项目尚未内建认证主体映射、数据保留策略和可写的 L5-L7 语义。
 
 架构、行为保证与未采用的替代方案详见[设计文档](docs/design.zh.md)。
+
+## 规划中的能力
+
+“隐私感知的自适应记忆”目前处于 Draft 设计阶段，尚未改变当前版本的默认行为。规划包含本地隐私防火墙、敏感 query 的远端出口控制、可解释的自适应捕获、效用账本、确定性重排、token-aware 上下文装箱，以及按顺序质量门发布的评测与回滚策略。详见[开发计划](docs/privacy-aware-adaptive-memory-plan.zh.md)。
 
 ## 本地开发
 

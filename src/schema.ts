@@ -74,6 +74,14 @@ export const storedJobSchema = z.object({
   status: z.union([z.literal('accepted'), z.literal('completed'), z.literal('degraded')]),
   createdMemoryIds: z.array(memoryId),
   warnings: z.array(z.string()),
+  // Optional additive metadata keeps legacy scope documents readable.
+  startedAt: z.iso.datetime().optional(),
+  finishedAt: z.iso.datetime().optional(),
+  durationMs: safeInteger.optional(),
+  modelCalls: safeInteger.optional(),
+  code: z.enum(['INVALID_INPUT', 'SCOPE_REQUIRED', 'RAW_PERSIST_FAILED', 'EXTRACTION_FAILED',
+    'RECONCILE_FAILED', 'CONCURRENT_MODIFICATION', 'TOKENIZATION_FAILED', 'EMBEDDING_FAILED',
+    'EMBEDDING_SPACE_MISMATCH', 'STORE_UNAVAILABLE', 'INTERRUPTED', 'ABORTED', 'UNKNOWN']).optional(),
 })
 
 /** One durable write job. */

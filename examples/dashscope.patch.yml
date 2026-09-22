@@ -1,0 +1,34 @@
+# Apply after installing @evyn/dsh-memory into the Web profile.
+# Credentials stay in the launch environment; do not put a literal key here.
+- id: llm-pi-ai
+  config:
+    providers:
+      dashscope-memory:
+        displayName: DashScope
+        api: openai-completions
+        apiKeyEnv: DASHSCOPE_API_KEY
+        baseURL: !!js process.env.DASHSCOPE_API_URL
+        timeoutMs: 60000
+        streamIdleTimeoutMs: 60000
+        reasoning: off
+        compat:
+          thinkingFormat: qwen
+          supportsDeveloperRole: false
+          supportsReasoningEffort: false
+          supportsStore: false
+          supportsStrictMode: false
+          maxTokensField: max_tokens
+        models:
+          - id: qwen3.7-flash
+            name: Qwen 3.7 Flash
+            # Conservative deployment limits, not claims about vendor maxima.
+            contextWindow: 32768
+            maxTokens: 4096
+            reasoningEfforts:
+              off:
+              low: low
+
+- id: agent-default-model
+  config:
+    provider: dashscope-memory
+    model: qwen3.7-flash

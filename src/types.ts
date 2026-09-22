@@ -4,9 +4,12 @@
  * @module @evyn/dsh-memory/types
  */
 
+import type { MemoryDiagnostics, ReviseMemoryInput } from './diagnostics.ts'
+export type * from './diagnostics.ts'
+
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { JsonValue } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Stable identity of one memory record. */
 export type MemoryId = Branded<'MemoryId'>
@@ -166,7 +169,10 @@ export interface MemoryCapability {
   search(input: SearchMemoryInput, signal?: AbortSignal): Promise<SearchResult>
   get(memoryId: MemoryId, scope: MemoryScope): MemoryRecord | undefined
   list(input: ListMemoryInput): readonly MemoryRecord[]
-  forget(memoryId: MemoryId, scope: MemoryScope): Promise<ForgetReceipt>
+  forget(memoryId: MemoryId, scope: MemoryScope, expectedRevision?: number): Promise<ForgetReceipt>
+  managementScopes(): readonly MemoryScope[]
+  inspect(scope: MemoryScope): MemoryDiagnostics
+  revise(input: ReviseMemoryInput, signal?: AbortSignal): Promise<WriteReceipt>
   export(scope: MemoryScope): readonly MemoryRecord[]
   import(scope: MemoryScope, records: readonly MemoryRecord[]): Promise<number>
   health(): MemoryHealthReport
